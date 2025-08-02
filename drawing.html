@@ -3,185 +3,189 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>Infinite Canvas Drawing</title>
+  <title>Infinite Drawing Canvas</title>
   <style>
     html, body {
       margin: 0;
       padding: 0;
       overflow: hidden;
-      background: #222;
+      background: #fff;
+      touch-action: none;
     }
     canvas {
       display: block;
-      touch-action: none;
-      image-rendering: auto;
+      background: white;
     }
   </style>
 </head>
 <body>
-<canvas id="canvas"></canvas>
-<script>
-  const canvas = document.getElementById("canvas");
-  const ctx = canvas.getContext("2d", { alpha: false });
+  <canvas id="canvas"></canvas>
 
-  // تحسين جودة الخط (مضاد للبكسلة)
-  ctx.imageSmoothingEnabled = true;
-  ctx.lineCap = "round";
-  ctx.lineJoin = "round";
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
 
-  let drawing = false;
-  let lastX = 0, lastY = 0;
+    let isDrawing = false;
+    let lastX = 0;
+    let lastY = 0;
 
-  let brushSize = 5;
-  let brushColor = "#ffffff";
+    let zoom = 1;
+    let offsetX = 0;
+    let offsetY = 0;
 
-  let zoom = 1;
-  let offsetX = 0, offsetY = 0;
-  let isPanning = false;
-  let panStart = { x: 0, y: 0 };
+    let isPanning = false;
+    let panStart = { x: 0, y: 0 };
 
-  let lastDistance = null;
+    let isTouchZooming = false;
+    let lastTouchDist = 0;
 
-  function resizeCanvas() {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-    redraw();
-  }
+    let drawingEnabled = true;
 
-  function redraw() {
-    const img = new Image();
-    img.src = canvas.toDataURL(); // snapshot
-    img.onload = () => {
-      ctx.setTransform(1, 0, 0, 1, 0, 0); // reset
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.setTransform(zoom, 0, 0, zoom, offsetX, offsetY);
-      ctx.drawImage(img, 0, 0);
-    };
-  }
-
-  function toCanvasCoords(x, y) {
-    return {
-      x: (x - offsetX) / zoom,
-      y: (y - offsetY) / zoom
-    };
-  }
-
-  function startDraw(x, y) {
-    drawing = true;
-    const pos = toCanvasCoords(x, y);
-    lastX = pos.x;
-    lastY = pos.y;
-  }
-
-  function draw(x, y) {
-    if (!drawing) return;
-    const pos = toCanvasCoords(x, y);
-    ctx.strokeStyle = brushColor;
-    ctx.lineWidth = brushSize;
-    ctx.beginPath();
-    ctx.moveTo(lastX, lastY);
-    ctx.lineTo(pos.x, pos.y);
-    ctx.stroke();
-    lastX = pos.x;
-    lastY = pos.y;
-  }
-
-  function endDraw() {
-    drawing = false;
-  }
-
-  function getTouchDistance(touches) {
-    const dx = touches[0].clientX - touches[1].clientX;
-    const dy = touches[0].clientY - touches[1].clientY;
-    return Math.sqrt(dx * dx + dy * dy);
-  }
-
-  canvas.addEventListener("mousedown", e => {
-    startDraw(e.clientX, e.clientY);
-  });
-
-  canvas.addEventListener("mousemove", e => {
-    draw(e.clientX, e.clientY);
-  });
-
-  canvas.addEventListener("mouseup", endDraw);
-  canvas.addEventListener("mouseleave", endDraw);
-
-  canvas.addEventListener("wheel", e => {
-    const delta = e.deltaY < 0 ? 1.1 : 0.9;
-    const mouseX = e.clientX;
-    const mouseY = e.clientY;
-
-    const worldX = (mouseX - offsetX) / zoom;
-    const worldY = (mouseY - offsetY) / zoom;
-
-    zoom *= delta;
-
-    offsetX = mouseX - worldX * zoom;
-    offsetY = mouseY - worldY * zoom;
-
-    redraw();
-  }, { passive: false });
-
-  canvas.addEventListener("touchstart", e => {
-    if (e.touches.length === 1) {
-      e.preventDefault();
-      const touch = e.touches[0];
-      startDraw(touch.clientX, touch.clientY);
-    } else if (e.touches.length === 2) {
-      isPanning = true;
-      lastDistance = getTouchDistance(e.touches);
-      panStart = {
-        x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
-        y: (e.touches[0].clientY + e.touches[1].clientY) / 2
-      };
-    }
-  }, { passive: false });
-
-  canvas.addEventListener("touchmove", e => {
-    if (e.touches.length === 1 && !isPanning) {
-      e.preventDefault();
-      const touch = e.touches[0];
-      draw(touch.clientX, touch.clientY);
-    } else if (e.touches.length === 2) {
-      const newDistance = getTouchDistance(e.touches);
-      const zoomFactor = newDistance / lastDistance;
-      lastDistance = newDistance;
-
-      const centerNow = {
-        x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
-        y: (e.touches[0].clientY + e.touches[1].clientY) / 2
-      };
-
-      const worldX = (centerNow.x - offsetX) / zoom;
-      const worldY = (centerNow.y - offsetY) / zoom;
-
-      zoom *= zoomFactor;
-
-      offsetX = centerNow.x - worldX * zoom;
-      offsetY = centerNow.y - worldY * zoom;
-
-      // Pan
-      const dx = centerNow.x - panStart.x;
-      const dy = centerNow.y - panStart.y;
-      offsetX += dx;
-      offsetY += dy;
-      panStart = centerNow;
-
+    // ==== تحسين الجودة ==========
+    const dpi = window.devicePixelRatio || 1;
+    function resizeCanvas() {
+      canvas.width = window.innerWidth * dpi;
+      canvas.height = window.innerHeight * dpi;
+      canvas.style.width = window.innerWidth + 'px';
+      canvas.style.height = window.innerHeight + 'px';
+      ctx.setTransform(1, 0, 0, 1, 0, 0); // reset transform
+      ctx.scale(dpi, dpi);
       redraw();
     }
-  }, { passive: false });
 
-  canvas.addEventListener("touchend", e => {
-    endDraw();
-    if (e.touches.length < 2) {
-      isPanning = false;
-      lastDistance = null;
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    function toWorldCoords(x, y) {
+      return {
+        x: (x - offsetX) / zoom,
+        y: (y - offsetY) / zoom
+      };
     }
-  });
 
-  window.addEventListener("resize", resizeCanvas);
-  resizeCanvas();
-</script>
+    function startDraw(x, y) {
+      isDrawing = true;
+      const pos = toWorldCoords(x, y);
+      lastX = pos.x;
+      lastY = pos.y;
+    }
+
+    function draw(x, y) {
+      if (!isDrawing) return;
+      const pos = toWorldCoords(x, y);
+      ctx.save();
+      ctx.lineWidth = 3;
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = 'black';
+      ctx.beginPath();
+      ctx.moveTo(lastX, lastY);
+      ctx.lineTo(pos.x, pos.y);
+      ctx.stroke();
+      ctx.restore();
+      lastX = pos.x;
+      lastY = pos.y;
+    }
+
+    function endDraw() {
+      isDrawing = false;
+    }
+
+    function redraw() {
+      // الرسمة مش هتتمسح هنا لأننا بنرسم مباشر
+      // لكن ممكن نعمل دعم undo/redo لاحقاً
+    }
+
+    // ======== PC Mouse ===========
+    canvas.addEventListener('mousedown', e => {
+      if (e.button === 0) {
+        drawingEnabled = true;
+        startDraw(e.clientX, e.clientY);
+      } else if (e.button === 1 || e.button === 2) {
+        isPanning = true;
+        panStart = { x: e.clientX, y: e.clientY };
+      }
+    });
+
+    canvas.addEventListener('mousemove', e => {
+      if (isDrawing && drawingEnabled) {
+        draw(e.clientX, e.clientY);
+      } else if (isPanning) {
+        offsetX += (e.clientX - panStart.x);
+        offsetY += (e.clientY - panStart.y);
+        panStart = { x: e.clientX, y: e.clientY };
+        redraw();
+      }
+    });
+
+    canvas.addEventListener('mouseup', () => {
+      endDraw();
+      isPanning = false;
+    });
+
+    canvas.addEventListener('wheel', e => {
+      const zoomFactor = 1.1;
+      const mouse = toWorldCoords(e.clientX, e.clientY);
+      if (e.deltaY < 0) {
+        zoom *= zoomFactor;
+      } else {
+        zoom /= zoomFactor;
+      }
+      offsetX = e.clientX - mouse.x * zoom;
+      offsetY = e.clientY - mouse.y * zoom;
+      redraw();
+    });
+
+    // ========= Touch Support ===========
+    function getTouchDistance(touches) {
+      const dx = touches[0].clientX - touches[1].clientX;
+      const dy = touches[0].clientY - touches[1].clientY;
+      return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    canvas.addEventListener('touchstart', e => {
+      if (e.touches.length === 1) {
+        drawingEnabled = true;
+        isTouchZooming = false;
+        const touch = e.touches[0];
+        startDraw(touch.clientX, touch.clientY);
+      } else if (e.touches.length === 2) {
+        drawingEnabled = false;
+        isTouchZooming = true;
+        lastTouchDist = getTouchDistance(e.touches);
+        panStart = {
+          x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+          y: (e.touches[0].clientY + e.touches[1].clientY) / 2
+        };
+      }
+    }, { passive: false });
+
+    canvas.addEventListener('touchmove', e => {
+      e.preventDefault();
+      if (isTouchZooming && e.touches.length === 2) {
+        const newDist = getTouchDistance(e.touches);
+        const center = {
+          x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+          y: (e.touches[0].clientY + e.touches[1].clientY) / 2
+        };
+
+        const worldPos = toWorldCoords(center.x, center.y);
+        zoom *= newDist / lastTouchDist;
+        offsetX = center.x - worldPos.x * zoom;
+        offsetY = center.y - worldPos.y * zoom;
+        lastTouchDist = newDist;
+        redraw();
+      } else if (e.touches.length === 1 && drawingEnabled) {
+        const touch = e.touches[0];
+        draw(touch.clientX, touch.clientY);
+      }
+    }, { passive: false });
+
+    canvas.addEventListener('touchend', e => {
+      if (e.touches.length === 0) {
+        endDraw();
+        isTouchZooming = false;
+      }
+    });
+  </script>
 </body>
 </html>
