@@ -13,7 +13,6 @@
       background: #222;
       font-family: Arial, sans-serif;
     }
-    
     .toolbar {
       position: fixed;
       bottom: 0;
@@ -27,7 +26,6 @@
       flex-wrap: wrap;
       justify-content: center;
     }
-    
     .toolbar button {
       background: #444;
       color: white;
@@ -37,7 +35,6 @@
       font-size: 14px;
       min-width: 60px;
     }
-    
     .toolbar input[type="number"] {
       width: 60px;
       background: #333;
@@ -47,14 +44,12 @@
       padding: 8px;
       text-align: center;
     }
-    
     .toolbar input[type="color"] {
       width: 40px;
       height: 40px;
       border: none;
       background: none;
     }
-    
     canvas {
       position: fixed;
       top: 0;
@@ -64,7 +59,6 @@
       background: white;
       touch-action: none;
     }
-    
     #zoomInfo {
       position: fixed;
       top: 10px;
@@ -76,7 +70,6 @@
       font-size: 12px;
       z-index: 100;
     }
-    
     #controlsInfo {
       position: fixed;
       top: 10px;
@@ -88,11 +81,9 @@
       font-size: 12px;
       z-index: 100;
     }
-    
     #fileInput {
       display: none;
     }
-    
     @media (max-width: 768px) {
       #controlsInfo {
         display: none;
@@ -107,9 +98,9 @@
     WASD: حركة | Q/E: تكبير/تصغير | B: فرشاة | X: ممحاة<br>
     1/2/3: أحجام الفرشاة | Space: تحريك | Ctrl+Z/Y: تراجع/إعادة
   </div>
-  
+
   <canvas id="canvas"></canvas>
-  
+
   <div class="toolbar">
     <button onclick="setTool('brush')">✏️ فرشاة</button>
     <button onclick="setTool('eraser')">🧽 ممحاة</button>
@@ -120,19 +111,17 @@
     <button onclick="clearCanvas()">🗑️ مسح</button>
     <button onclick="save()">💾 حفظ</button>
     <button onclick="openFileDialog()">📂 فتح</button>
-    <input type="file" id="fileInput" accept=".json" style="display:none">
+    <input type="file" id="fileInput" accept=".json">
   </div>
 
   <script>
-    // العناصر الرئيسية
     const canvas = document.getElementById("canvas");
     const ctx = canvas.getContext("2d");
     const sizeInput = document.getElementById("sizeInput");
     const colorPicker = document.getElementById("colorPicker");
     const zoomInfo = document.getElementById("zoomInfo");
     const fileInput = document.getElementById("fileInput");
-    
-    // حالة التطبيق
+
     let tool = "brush";
     let drawing = false;
     let baseBrushSize = parseInt(sizeInput.value);
@@ -146,15 +135,20 @@
     let currentPath = [];
     let isPanning = false;
     let panStart = { x: 0, y: 0 };
-    
-    // تحكمات لوحة المفاتيح
     const keys = {};
     const PAN_SPEED = 10;
     const ZOOM_SPEED = 0.05;
     const MIN_ZOOM = 0.000000000000000000000001;
     const MAX_ZOOM = 1000000;
 
-    // تهيئة التطبيق
+    // متغيرات جديدة للتعامل مع اللمس المتعدد
+    let initialDistance = 0;
+    let initialScale = 1;
+    let initialOffsetX = 0;
+    let initialOffsetY = 0;
+    let initialMidpoint = { x: 0, y: 0 };
+    let touchCount = 0;
+
     function init() {
       resizeCanvas();
       window.addEventListener("resize", resizeCanvas);
@@ -171,87 +165,114 @@
     }
 
     function setupEventListeners() {
-      // لوحة المفاتيح
       window.addEventListener("keydown", (e) => {
         keys[e.key.toLowerCase()] = true;
-        if (e.ctrlKey) {
-          if (e.key === 'z') undo();
-          if (e.key === 'y') redo();
-        }
+        if (e.ctrlKey && e.key === 'z') undo();
+        if (e.ctrlKey && e.key === 'y') redo();
       });
-      
       window.addEventListener("keyup", (e) => {
         keys[e.key.toLowerCase()] = false;
       });
-      
-      // الفأرة
       canvas.addEventListener("mousedown", handleMouseDown);
       canvas.addEventListener("mousemove", handleMouseMove);
       canvas.addEventListener("mouseup", handleMouseUp);
       canvas.addEventListener("wheel", handleWheel, { passive: false });
-      
-      // شريط الأدوات
+
+      // ✅ لمس
+      canvas.addEventListener("touchstart", handleTouchStart, { passive: false });
+      canvas.addEventListener("touchmove", handleTouchMove, { passive: false });
+      canvas.addEventListener("touchend", handleTouchEnd);
+
       sizeInput.addEventListener("input", () => {
         baseBrushSize = parseInt(sizeInput.value);
       });
     }
 
-    function handleKeyboardControls() {
-      const centerX = canvas.width / 2;
-      const centerY = canvas.height / 2;
+    function getTouchPos(touch) {
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x: touch.clientX - rect.left,
+        y: touch.clientY - rect.top
+      };
+    }
+
+    function calculateDistance(touch1, touch2) {
+      const dx = touch1.clientX - touch2.clientX;
+      const dy = touch1.clientY - touch2.clientY;
+      return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    function calculateMidpoint(touch1, touch2) {
+      return {
+        x: (touch1.clientX + touch2.clientX) / 2,
+        y: (touch1.clientY + touch2.clientY) / 2
+      };
+    }
+
+    function handleTouchStart(e) {
+      touchCount = e.touches.length;
       
-      // الحركة
-      if (keys['w'] || keys['arrowup']) offsetY -= PAN_SPEED / scale;
-      if (keys['s'] || keys['arrowdown']) offsetY += PAN_SPEED / scale;
-      if (keys['a'] || keys['arrowleft']) offsetX -= PAN_SPEED / scale;
-      if (keys['d'] || keys['arrowright']) offsetX += PAN_SPEED / scale;
+      if (touchCount === 1) {
+        e.preventDefault();
+        const pos = getTouchPos(e.touches[0]);
+        startDraw(pos.x, pos.y);
+      } else if (touchCount === 2) {
+        e.preventDefault();
+        initialDistance = calculateDistance(e.touches[0], e.touches[1]);
+        initialScale = scale;
+        initialOffsetX = offsetX;
+        initialOffsetY = offsetY;
+        initialMidpoint = calculateMidpoint(e.touches[0], e.touches[1]);
+      }
+    }
+
+    function handleTouchMove(e) {
+      touchCount = e.touches.length;
       
-      // التكبير/التصغير
-      if (keys['q']) handleZoom(centerX, centerY, 1 - ZOOM_SPEED);
-      if (keys['e']) handleZoom(centerX, centerY, 1 + ZOOM_SPEED);
-      
-      // الأدوات
-      if (keys['b']) setTool('brush');
-      if (keys['x']) setTool('eraser');
-      
-      // أحجام الفرشاة
-      if (keys['1']) baseBrushSize = 1;
-      if (keys['2']) baseBrushSize = 5;
-      if (keys['3']) baseBrushSize = 10;
-      
-      // التحريك
-      isPanning = keys[' '];
-      
-      if (keys['w'] || keys['s'] || keys['a'] || keys['d'] || keys['q'] || keys['e']) {
+      if (touchCount === 1 && !isPanning) {
+        e.preventDefault();
+        const pos = getTouchPos(e.touches[0]);
+        draw(pos.x, pos.y);
+      } else if (touchCount === 2) {
+        e.preventDefault();
+        const currentDistance = calculateDistance(e.touches[0], e.touches[1]);
+        const currentMidpoint = calculateMidpoint(e.touches[0], e.touches[1]);
+        
+        // الزوم عند تغير المسافة بين الأصابع
+        if (Math.abs(currentDistance - initialDistance) > 5) {
+          const zoomFactor = currentDistance / initialDistance;
+          scale = initialScale * zoomFactor;
+          scale = Math.max(MIN_ZOOM, Math.min(scale, MAX_ZOOM));
+          
+          // حساب الإزاحة للحفاظ على نقطة المنتصف
+          const rect = canvas.getBoundingClientRect();
+          const wx = (currentMidpoint.x - initialOffsetX) / initialScale;
+          const wy = (currentMidpoint.y - initialOffsetY) / initialScale;
+          offsetX = currentMidpoint.x - wx * scale;
+          offsetY = currentMidpoint.y - wy * scale;
+        } 
+        // التحريك عند تحريك الأصابع في نفس الاتجاه
+        else {
+          offsetX = initialOffsetX + (currentMidpoint.x - initialMidpoint.x);
+          offsetY = initialOffsetY + (currentMidpoint.y - initialMidpoint.y);
+        }
+        
+        updateZoomInfo();
         redraw();
       }
     }
 
-    function animationLoop() {
-      handleKeyboardControls();
-      requestAnimationFrame(animationLoop);
+    function handleTouchEnd(e) {
+      if (touchCount === 1 && drawing) endDraw();
+      touchCount = e.touches.length;
+      
+      // إذا بقي إصبع واحد بعد رفع أحد الأصابع، نبدأ الرسم
+      if (touchCount === 1) {
+        const pos = getTouchPos(e.touches[0]);
+        startDraw(pos.x, pos.y);
+      }
     }
 
-    function setTool(t) {
-      tool = t;
-    }
-    
-    function changeColor(color) {
-      brushColor = color;
-    }
-    
-    function screenToWorld(x, y) {
-      return [(x - offsetX) / scale, (y - offsetY) / scale];
-    }
-    
-    function worldToScreen(x, y) {
-      return [x * scale + offsetX, y * scale + offsetY];
-    }
-    
-    function getCurrentBrushSize() {
-      return baseBrushSize / Math.sqrt(scale);
-    }
-    
     function handleMouseDown(e) {
       if (e.button === 1 || e.ctrlKey) {
         isPanning = true;
@@ -260,20 +281,7 @@
         startDraw(e.clientX, e.clientY);
       }
     }
-    
-    function startDraw(x, y) {
-      if (isPanning) return;
-      const [wx, wy] = screenToWorld(x, y);
-      currentPath = [{
-        x: wx,
-        y: wy,
-        tool,
-        size: getCurrentBrushSize(),
-        color: tool === "brush" ? brushColor : "white"
-      }];
-      drawing = true;
-    }
-    
+
     function handleMouseMove(e) {
       if (isPanning) {
         offsetX += e.clientX - panStart.x;
@@ -284,10 +292,54 @@
         draw(e.clientX, e.clientY);
       }
     }
-    
+
+    function handleMouseUp(e) {
+      if (isPanning) {
+        isPanning = false;
+      } else {
+        endDraw();
+      }
+    }
+
+    function handleWheel(e) {
+      e.preventDefault();
+      const zoomFactor = Math.exp(-e.deltaY * 0.001);
+      const rect = canvas.getBoundingClientRect();
+      handleZoom(e.clientX - rect.left, e.clientY - rect.top, zoomFactor);
+    }
+
+    function handleZoom(centerX, centerY, zoomFactor) {
+      const wx = (centerX - offsetX) / scale;
+      const wy = (centerY - offsetY) / scale;
+      scale *= zoomFactor;
+      scale = Math.max(MIN_ZOOM, Math.min(scale, MAX_ZOOM));
+      offsetX = centerX - wx * scale;
+      offsetY = centerY - wy * scale;
+      updateZoomInfo();
+      redraw();
+    }
+
+    function setTool(t) { tool = t; }
+    function changeColor(color) { brushColor = color; }
+    function screenToWorld(x, y) { return [(x - offsetX) / scale, (y - offsetY) / scale]; }
+    function worldToScreen(x, y) { return [x * scale + offsetX, y * scale + offsetY]; }
+    function getCurrentBrushSize() { return baseBrushSize / Math.sqrt(scale); }
+
+    function startDraw(x, y) {
+      if (isPanning || touchCount > 1) return;
+      const [wx, wy] = screenToWorld(x, y);
+      currentPath = [{
+        x: wx,
+        y: wy,
+        tool,
+        size: getCurrentBrushSize(),
+        color: tool === "brush" ? brushColor : "white"
+      }];
+      drawing = true;
+    }
+
     function draw(x, y) {
-      if (!drawing || isPanning) return;
-      
+      if (!drawing || isPanning || touchCount > 1) return;
       const [wx, wy] = screenToWorld(x, y);
       currentPath.push({
         x: wx,
@@ -296,18 +348,9 @@
         size: getCurrentBrushSize(),
         color: tool === "brush" ? brushColor : "white"
       });
-      
       redraw();
     }
-    
-    function handleMouseUp(e) {
-      if (isPanning) {
-        isPanning = false;
-      } else {
-        endDraw();
-      }
-    }
-    
+
     function endDraw() {
       if (drawing && currentPath.length > 1) {
         paths.push(currentPath);
@@ -315,31 +358,9 @@
       }
       drawing = false;
     }
-    
-    function handleWheel(e) {
-      e.preventDefault();
-      const zoomFactor = Math.exp(-e.deltaY * 0.001);
-      const rect = canvas.getBoundingClientRect();
-      handleZoom(e.clientX - rect.left, e.clientY - rect.top, zoomFactor);
-    }
-    
-    function handleZoom(centerX, centerY, zoomFactor) {
-      const wx = (centerX - offsetX) / scale;
-      const wy = (centerY - offsetY) / scale;
-      
-      scale *= zoomFactor;
-      scale = Math.max(MIN_ZOOM, Math.min(scale, MAX_ZOOM));
-      
-      offsetX = centerX - wx * scale;
-      offsetY = centerY - wy * scale;
-      
-      updateZoomInfo();
-      redraw();
-    }
-    
+
     function redraw() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      
       for (const path of paths) {
         ctx.beginPath();
         for (let i = 0; i < path.length; i++) {
@@ -349,13 +370,11 @@
           ctx.strokeStyle = p.color;
           ctx.lineCap = "round";
           ctx.lineJoin = "round";
-          
           if (i === 0) ctx.moveTo(sx, sy);
           else ctx.lineTo(sx, sy);
         }
         ctx.stroke();
       }
-      
       if (drawing && currentPath.length > 0) {
         ctx.beginPath();
         for (let i = 0; i < currentPath.length; i++) {
@@ -365,14 +384,17 @@
           ctx.strokeStyle = p.color;
           ctx.lineCap = "round";
           ctx.lineJoin = "round";
-          
           if (i === 0) ctx.moveTo(sx, sy);
           else ctx.lineTo(sx, sy);
         }
         ctx.stroke();
       }
     }
-    
+
+    function updateZoomInfo() {
+      zoomInfo.textContent = `مستوى التكبير: ${scale.toFixed(2)}x`;
+    }
+
     function saveHistory() {
       history.splice(historyIndex + 1);
       history.push(JSON.stringify({
@@ -382,21 +404,21 @@
       }));
       historyIndex++;
     }
-    
+
     function undo() {
       if (historyIndex > 0) {
         historyIndex--;
         loadStateFromHistory();
       }
     }
-    
+
     function redo() {
       if (historyIndex < history.length - 1) {
         historyIndex++;
         loadStateFromHistory();
       }
     }
-    
+
     function loadStateFromHistory() {
       try {
         const state = JSON.parse(history[historyIndex]);
@@ -404,21 +426,19 @@
         offsetX = state.camera?.offsetX || 0;
         offsetY = state.camera?.offsetY || 0;
         scale = state.camera?.scale || 1;
-        
         if (state.brush) {
           baseBrushSize = state.brush.baseBrushSize || 5;
           brushColor = state.brush.brushColor || "#000000";
           colorPicker.value = brushColor;
           sizeInput.value = baseBrushSize;
         }
-        
         redraw();
         updateZoomInfo();
       } catch (error) {
         console.error("Error loading state:", error);
       }
     }
-    
+
     function clearCanvas() {
       if (confirm("هل تريد مسح اللوحة بالكامل؟")) {
         paths = [];
@@ -426,80 +446,86 @@
         redraw();
       }
     }
-    
+
     function save() {
       const data = {
         paths: JSON.parse(JSON.stringify(paths)),
         camera: { offsetX, offsetY, scale },
         brush: { baseBrushSize, brushColor }
       };
-      
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
       const link = document.createElement("a");
-      link.download = رسمة-${new Date().toISOString().slice(0, 19)}.json;
+      link.download = `رسمة-${new Date().toISOString().slice(0, 19)}.json`;
       link.href = URL.createObjectURL(blob);
       link.click();
     }
-    
+
     function openFileDialog() {
       fileInput.click();
     }
-    
+
     function handleFileSelect(event) {
       const file = event.target.files[0];
       if (!file) return;
-      
       const reader = new FileReader();
       reader.onload = function(e) {
         try {
           const data = JSON.parse(e.target.result);
-          
-          if (!data || !Array.isArray(data.paths)) {
-            throw new Error("تنسيق الملف غير صالح");
-          }
-          
+          if (!data || !Array.isArray(data.paths)) throw new Error("تنسيق الملف غير صالح");
           paths = JSON.parse(JSON.stringify(data.paths));
           offsetX = data.camera?.offsetX || 0;
           offsetY = data.camera?.offsetY || 0;
           scale = data.camera?.scale || 1;
-          
           if (data.brush) {
             baseBrushSize = data.brush.baseBrushSize || 5;
             brushColor = data.brush.brushColor || "#000000";
             colorPicker.value = brushColor;
             sizeInput.value = baseBrushSize;
           }
-          
           history = [JSON.stringify({
             paths: JSON.parse(JSON.stringify(paths)),
             camera: { offsetX, offsetY, scale },
             brush: { baseBrushSize, brushColor }
           })];
           historyIndex = 0;
-          
           redraw();
           updateZoomInfo();
           alert("تم تحميل الرسم بنجاح");
         } catch (error) {
-          alert(خطأ في تحميل الملف: ${error.message});
-          console.error("Error loading file:", error);
+          alert(`خطأ في تحميل الملف: ${error.message}`);
         }
       };
-      
       reader.onerror = function() {
         alert("حدث خطأ أثناء قراءة الملف");
       };
-      
       reader.readAsText(file);
     }
-    
-    function updateZoomInfo() {
-      zoomInfo.textContent = مستوى التكبير: ${scale.toFixed(2)}x;
+
+    function animationLoop() {
+      // التحكم بالوحة المفاتيح
+      if (keys['w'] || keys['arrowup']) offsetY += PAN_SPEED;
+      if (keys['s'] || keys['arrowdown']) offsetY -= PAN_SPEED;
+      if (keys['a'] || keys['arrowleft']) offsetX += PAN_SPEED;
+      if (keys['d'] || keys['arrowright']) offsetX -= PAN_SPEED;
+      if (keys['q']) handleZoom(canvas.width/2, canvas.height/2, 1 + ZOOM_SPEED);
+      if (keys['e']) handleZoom(canvas.width/2, canvas.height/2, 1 - ZOOM_SPEED);
+      if (keys['b']) setTool('brush');
+      if (keys['x']) setTool('eraser');
+      if (keys['1']) baseBrushSize = 5;
+      if (keys['2']) baseBrushSize = 10;
+      if (keys['3']) baseBrushSize = 20;
+      
+      if (keys['w'] || keys['s'] || keys['a'] || keys['d'] || 
+          keys['q'] || keys['e'] || keys['arrowup'] || keys['arrowdown'] || 
+          keys['arrowleft'] || keys['arrowright']) {
+        redraw();
+        updateZoomInfo();
+      }
+      
+      requestAnimationFrame(animationLoop);
     }
 
-    // بدء تشغيل التطبيق
     init();
   </script>
 </body>
 </html>
-
