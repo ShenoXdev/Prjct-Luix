@@ -97,27 +97,6 @@
       #controlsInfo {
         display: none;
       }
-      
-      .toolbar button {
-        padding: 10px 14px;
-        font-size: 16px;
-      }
-    }
-    
-    /* إضافة مؤشر للتحريك على الموبايل */
-    #panIndicator {
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background: rgba(0, 0, 0, 0.7);
-      color: white;
-      padding: 10px 15px;
-      border-radius: 20px;
-      font-size: 14px;
-      z-index: 90;
-      display: none;
-      pointer-events: none;
     }
   </style>
 </head>
@@ -128,7 +107,6 @@
     WASD: حركة | Q/E: تكبير/تصغير | B: فرشاة | X: ممحاة<br>
     1/2/3: أحجام الفرشاة | Space: تحريك | Ctrl+Z/Y: تراجع/إعادة
   </div>
-  <div id="panIndicator">اسحب بإصبعين للتحريك</div>
   
   <canvas id="canvas"></canvas>
   
@@ -153,7 +131,6 @@
     const colorPicker = document.getElementById("colorPicker");
     const zoomInfo = document.getElementById("zoomInfo");
     const fileInput = document.getElementById("fileInput");
-    const panIndicator = document.getElementById("panIndicator");
     
     // حالة التطبيق
     let tool = "brush";
@@ -169,14 +146,6 @@
     let currentPath = [];
     let isPanning = false;
     let panStart = { x: 0, y: 0 };
-    
-    // متغيرات للتحكم باللمس المتعدد
-    let touchStartDistance = 0;
-    let touchStartScale = 1;
-    let touchStartOffset = { x: 0, y: 0 };
-    let lastTouchTime = 0;
-    let lastTouchX = 0;
-    let lastTouchY = 0;
     
     // تحكمات لوحة المفاتيح
     const keys = {};
@@ -221,124 +190,10 @@
       canvas.addEventListener("mouseup", handleMouseUp);
       canvas.addEventListener("wheel", handleWheel, { passive: false });
       
-      // اللمس
-      canvas.addEventListener("touchstart", handleTouchStart, { passive: false });
-      canvas.addEventListener("touchmove", handleTouchMove, { passive: false });
-      canvas.addEventListener("touchend", handleTouchEnd);
-      
-      // منع التمرير عند اللمس على شريط الأدوات
-      document.querySelector('.toolbar').addEventListener('touchstart', (e) => {
-        e.stopPropagation();
-      }, { passive: false });
-      
       // شريط الأدوات
       sizeInput.addEventListener("input", () => {
         baseBrushSize = parseInt(sizeInput.value);
       });
-    }
-
-    // معالجة أحداث اللمس
-    function handleTouchStart(e) {
-      e.preventDefault();
-      
-      const now = Date.now();
-      const isDoubleTap = (now - lastTouchTime) < 300 && 
-                         Math.abs(e.touches[0].clientX - lastTouchX) < 10 && 
-                         Math.abs(e.touches[0].clientY - lastTouchY) < 10;
-      
-      if (isDoubleTap) {
-        // إعادة تعيين الزوم والموضع عند النقر المزدوج
-        scale = 1;
-        offsetX = 0;
-        offsetY = 0;
-        updateZoomInfo();
-        redraw();
-        return;
-      }
-      
-      lastTouchTime = now;
-      lastTouchX = e.touches[0].clientX;
-      lastTouchY = e.touches[0].clientY;
-      
-      if (e.touches.length === 1) {
-        // لمس واحد - الرسم أو بدء التحريك
-        if (!isPanning) {
-          startDraw(e.touches[0].clientX, e.touches[0].clientY);
-        }
-      } else if (e.touches.length === 2) {
-        // لمس متعدد - التحريك أو التكبير/التصغير
-        isPanning = true;
-        panIndicator.style.display = 'block';
-        
-        // حساب المسافة بين الإصبعين
-        const touch1 = e.touches[0];
-        const touch2 = e.touches[1];
-        touchStartDistance = Math.hypot(
-          touch2.clientX - touch1.clientX,
-          touch2.clientY - touch1.clientY
-        );
-        
-        touchStartScale = scale;
-        touchStartOffset = { x: offsetX, y: offsetY };
-        
-        // إيقاف الرسم إذا كان جارياً
-        if (drawing) {
-          endDraw();
-        }
-      }
-    }
-    
-    function handleTouchMove(e) {
-      e.preventDefault();
-      
-      if (e.touches.length === 1 && !isPanning) {
-        // استمرار الرسم
-        draw(e.touches[0].clientX, e.touches[0].clientY);
-      } else if (e.touches.length === 2) {
-        // التحريك أو التكبير/التصغير
-        const touch1 = e.touches[0];
-        const touch2 = e.touches[1];
-        
-        // حساب المسافة الحالية بين الإصبعين
-        const currentDistance = Math.hypot(
-          touch2.clientX - touch1.clientX,
-          touch2.clientY - touch1.clientY
-        );
-        
-        // حساب مركز اللمس
-        const centerX = (touch1.clientX + touch2.clientX) / 2;
-        const centerY = (touch1.clientY + touch2.clientY) / 2;
-        
-        // حساب عامل التكبير/التصغير
-        const zoomFactor = currentDistance / touchStartDistance;
-        
-        // تطبيق التكبير/التصغير
-        scale = touchStartScale * zoomFactor;
-        scale = Math.max(MIN_ZOOM, Math.min(scale, MAX_ZOOM));
-        
-        // حساب الإزاحة الجديدة
-        offsetX = touchStartOffset.x + (centerX - (touch1.clientX + touch2.clientX) / 2 + (touch1.clientX + touch2.clientX - (centerX * 2)) * zoomFactor;
-        offsetY = touchStartOffset.y + (centerY - (touch1.clientY + touch2.clientY) / 2 + (touch1.clientY + touch2.clientY - (centerY * 2)) * zoomFactor;
-        
-        updateZoomInfo();
-        redraw();
-      }
-    }
-    
-    function handleTouchEnd(e) {
-      if (e.touches.length === 0) {
-        // انتهاء اللمس
-        if (drawing) {
-          endDraw();
-        }
-        isPanning = false;
-        panIndicator.style.display = 'none';
-      } else if (e.touches.length === 1) {
-        // بقي إصبع واحد - العودة للرسم
-        isPanning = false;
-        panIndicator.style.display = 'none';
-        startDraw(e.touches[0].clientX, e.touches[0].clientY);
-      }
     }
 
     function handleKeyboardControls() {
@@ -451,6 +306,14 @@
       } else {
         endDraw();
       }
+    }
+    
+    function endDraw() {
+      if (drawing && currentPath.length > 1) {
+        paths.push(currentPath);
+        saveHistory();
+      }
+      drawing = false;
     }
     
     function handleWheel(e) {
