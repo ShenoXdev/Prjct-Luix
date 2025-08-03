@@ -6,19 +6,24 @@
   <title>Infinite Canvas Drawing</title>
   <style>
     html, body {
-      margin: 0; padding: 0;
+      margin: 0;
+      padding: 0;
       overflow: hidden;
+      height: 100%;
       touch-action: none;
     }
-    canvas {
-      display: block;
-      background: #fff;
+    #canvas {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%;
+      height: 100%;
+      touch-action: none;
     }
     #toolbar {
       position: absolute;
       top: 10px;
       left: 10px;
-      background: rgba(255, 255, 255, 0.9);
+      background: rgba(255, 255, 255, 0.8);
       padding: 8px;
       border-radius: 8px;
       z-index: 10;
@@ -30,7 +35,6 @@
 </head>
 <body>
   <canvas id="canvas"></canvas>
-
   <div id="toolbar">
     <button id="undoBtn">Undo</button>
     <button id="redoBtn">Redo</button>
@@ -39,173 +43,174 @@
     <input type="color" id="colorPicker">
     <button id="increaseBtn">+</button>
     <button id="decreaseBtn">-</button>
-    <input type="number" id="sizeInput" min="1" max="100000000000000000000000" value="5" step="1">
+    <input type="number" id="sizeInput" min="1" max="1e+23" value="5" step="1">
     <span id="zoomInfo">Zoom: 1x</span>
   </div>
 
   <script>
     const canvas = document.getElementById("canvas");
     const ctx = canvas.getContext("2d");
-    let width = canvas.width = window.innerWidth;
-    let height = canvas.height = window.innerHeight;
-
-    let brushColor = "#000000";
-    let baseBrushSize = 5;
-    let isErasing = false;
-
-    let offsetX = 0, offsetY = 0;
-    let startTouches = [];
-    let scale = 1;
-    let panX = 0, panY = 0;
-    let isDrawing = false;
-
-    let undoStack = [];
-    let redoStack = [];
-
-    const colorPicker = document.getElementById("colorPicker");
-    const sizeInput = document.getElementById("sizeInput");
-    const increaseBtn = document.getElementById("increaseBtn");
-    const decreaseBtn = document.getElementById("decreaseBtn");
     const undoBtn = document.getElementById("undoBtn");
     const redoBtn = document.getElementById("redoBtn");
     const newBtn = document.getElementById("newBtn");
     const eraseBtn = document.getElementById("eraseBtn");
+    const colorPicker = document.getElementById("colorPicker");
+    const increaseBtn = document.getElementById("increaseBtn");
+    const decreaseBtn = document.getElementById("decreaseBtn");
+    const sizeInput = document.getElementById("sizeInput");
     const zoomInfo = document.getElementById("zoomInfo");
 
-    function updateZoomDisplay() {
-      zoomInfo.textContent = `Zoom: ${scale.toFixed(2)}x`;
+    let drawing = false;
+    let erasing = false;
+    let scale = 1;
+    let camera = { x: 0, y: 0 };
+    let baseBrushSize = 5;
+    let color = "#000000";
+    let undoStack = [];
+    let redoStack = [];
+
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    function saveState() {
+      undoStack.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+      redoStack = [];
+    }
+
+    function restoreState(stackFrom, stackTo) {
+      if (stackFrom.length > 0) {
+        stackTo.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+        const imageData = stackFrom.pop();
+        ctx.putImageData(imageData, 0, 0);
+      }
+    }
+
+    function clearCanvas() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
     }
 
     function getCurrentBrushSize() {
       return Math.min(baseBrushSize / Math.sqrt(scale), 1e+23);
     }
 
-    function saveState() {
-      undoStack.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
-      if (undoStack.length > 50) undoStack.shift();
-      redoStack = [];
+    function screenToWorld(x, y) {
+      return {
+        x: (x - canvas.width / 2) / scale + camera.x,
+        y: (y - canvas.height / 2) / scale + camera.y
+      };
     }
 
-    function undo() {
-      if (undoStack.length > 0) {
-        redoStack.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
-        let state = undoStack.pop();
-        ctx.putImageData(state, 0, 0);
-      }
+    function drawLine(from, to) {
+      ctx.strokeStyle = erasing ? "#ffffff" : color;
+      ctx.lineWidth = getCurrentBrushSize();
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(from.x, from.y);
+      ctx.lineTo(to.x, to.y);
+      ctx.stroke();
     }
 
-    function redo() {
-      if (redoStack.length > 0) {
-        undoStack.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
-        let state = redoStack.pop();
-        ctx.putImageData(state, 0, 0);
-      }
-    }
-
-    function clearCanvas() {
-      saveState();
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-    }
-
-    colorPicker.addEventListener("input", () => {
-      brushColor = colorPicker.value;
-      isErasing = false;
-    });
-
-    sizeInput.addEventListener("input", () => {
-      let val = parseFloat(sizeInput.value);
-      if (val > 1e+23) val = 1e+23;
-      baseBrushSize = val;
-      sizeInput.value = baseBrushSize;
-    });
-
-    increaseBtn.addEventListener("click", () => {
-      baseBrushSize = Math.min(baseBrushSize + 1, 1e+23);
-      sizeInput.value = baseBrushSize;
-    });
-
-    decreaseBtn.addEventListener("click", () => {
-      baseBrushSize = Math.max(baseBrushSize - 1, 1);
-      sizeInput.value = baseBrushSize;
-    });
-
-    undoBtn.addEventListener("click", undo);
-    redoBtn.addEventListener("click", redo);
-    newBtn.addEventListener("click", clearCanvas);
-    eraseBtn.addEventListener("click", () => {
-      isErasing = true;
-    });
+    let lastTouch = null;
 
     canvas.addEventListener("touchstart", (e) => {
       if (e.touches.length === 1) {
-        saveState();
         const touch = e.touches[0];
-        const x = (touch.clientX - panX) / scale;
-        const y = (touch.clientY - panY) / scale;
-        ctx.beginPath();
-        ctx.moveTo(x, y);
-        isDrawing = true;
-      } else if (e.touches.length === 3) {
-        startTouches = [...e.touches];
+        lastTouch = screenToWorld(touch.clientX, touch.clientY);
+        drawing = true;
+        saveState();
       }
     });
 
     canvas.addEventListener("touchmove", (e) => {
       e.preventDefault();
-      if (e.touches.length === 1 && isDrawing) {
+      if (e.touches.length === 1 && drawing) {
         const touch = e.touches[0];
-        const x = (touch.clientX - panX) / scale;
-        const y = (touch.clientY - panY) / scale;
-
-        ctx.lineTo(x, y);
-        ctx.strokeStyle = isErasing ? "#FFFFFF" : brushColor;
-        ctx.lineWidth = getCurrentBrushSize();
-        ctx.lineCap = "round";
-        ctx.stroke();
-      } else if (e.touches.length === 3) {
-        const dx = e.touches[0].clientX - startTouches[0].clientX;
-        const dy = e.touches[0].clientY - startTouches[0].clientY;
-        panX += dx;
-        panY += dy;
-        startTouches = [...e.touches];
-        redraw();
+        const current = screenToWorld(touch.clientX, touch.clientY);
+        drawLine(lastTouch, current);
+        lastTouch = current;
       } else if (e.touches.length === 2) {
-        const dx = e.touches[0].clientX - e.touches[1].clientX;
-        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        const t0 = e.touches[0];
+        const t1 = e.touches[1];
+
+        const dx = t1.clientX - t0.clientX;
+        const dy = t1.clientY - t0.clientY;
         const dist = Math.sqrt(dx * dx + dy * dy);
 
         if (!canvas._lastDist) canvas._lastDist = dist;
-        let zoomFactor = dist / canvas._lastDist;
-        scale *= zoomFactor;
-        scale = Math.min(Math.max(scale, 0.1), 100);
+        const zoomFactor = dist / canvas._lastDist;
         canvas._lastDist = dist;
-        updateZoomDisplay();
+
+        // Fix center
+        const centerX = (t0.clientX + t1.clientX) / 2;
+        const centerY = (t0.clientY + t1.clientY) / 2;
+        const worldBefore = screenToWorld(centerX, centerY);
+
+        scale *= zoomFactor;
+
+        const worldAfter = screenToWorld(centerX, centerY);
+        camera.x += worldBefore.x - worldAfter.x;
+        camera.y += worldBefore.y - worldAfter.y;
+
+        zoomInfo.textContent = `Zoom: ${scale.toFixed(2)}x`;
+      } else if (e.touches.length === 3) {
+        // Three fingers pan
+        const avgX = Array.from(e.touches).reduce((sum, t) => sum + t.clientX, 0) / 3;
+        const avgY = Array.from(e.touches).reduce((sum, t) => sum + t.clientY, 0) / 3;
+
+        if (!canvas._lastPan) canvas._lastPan = { x: avgX, y: avgY };
+
+        const dx = (canvas._lastPan.x - avgX) / scale;
+        const dy = (canvas._lastPan.y - avgY) / scale;
+
+        camera.x += dx;
+        camera.y += dy;
+        canvas._lastPan = { x: avgX, y: avgY };
       }
-    }, { passive: false });
+    });
 
     canvas.addEventListener("touchend", (e) => {
-      isDrawing = false;
-      if (e.touches.length < 2) {
+      if (e.touches.length === 0) {
+        drawing = false;
         canvas._lastDist = null;
+        canvas._lastPan = null;
       }
     });
 
     function redraw() {
-      let temp = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      ctx.setTransform(1, 0, 0, 1, 0, 0); // reset
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.setTransform(scale, 0, 0, scale, panX, panY);
-      ctx.putImageData(temp, 0, 0);
+      const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      clearCanvas();
+      ctx.save();
+      ctx.translate(canvas.width / 2, canvas.height / 2);
+      ctx.scale(scale, scale);
+      ctx.translate(-camera.x, -camera.y);
+      ctx.putImageData(imgData, 0, 0);
+      ctx.restore();
     }
 
-    window.addEventListener("resize", () => {
-      const oldImg = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      width = canvas.width = window.innerWidth;
-      height = canvas.height = window.innerHeight;
-      ctx.putImageData(oldImg, 0, 0);
+    colorPicker.addEventListener("input", (e) => color = e.target.value);
+    eraseBtn.addEventListener("click", () => erasing = !erasing);
+    increaseBtn.addEventListener("click", () => {
+      baseBrushSize *= 2;
+      sizeInput.value = baseBrushSize;
+    });
+    decreaseBtn.addEventListener("click", () => {
+      baseBrushSize = Math.max(1, baseBrushSize / 2);
+      sizeInput.value = baseBrushSize;
+    });
+    sizeInput.addEventListener("input", () => {
+      baseBrushSize = Math.min(parseFloat(sizeInput.value), 1e+23);
+    });
+    undoBtn.addEventListener("click", () => restoreState(undoStack, redoStack));
+    redoBtn.addEventListener("click", () => restoreState(redoStack, undoStack));
+    newBtn.addEventListener("click", () => {
+      saveState();
+      clearCanvas();
     });
 
-    updateZoomDisplay();
+    window.addEventListener("resize", () => {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    });
   </script>
 </body>
 </html>
