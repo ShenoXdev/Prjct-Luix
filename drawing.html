@@ -116,12 +116,15 @@
 
   <script>
     const canvas = document.getElementById("canvas");
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
     const sizeInput = document.getElementById("sizeInput");
     const colorPicker = document.getElementById("colorPicker");
     const zoomInfo = document.getElementById("zoomInfo");
     const fileInput = document.getElementById("fileInput");
 
+    // تحسين دقة الرسم
+    const dpr = window.devicePixelRatio || 1;
+    
     let tool = "brush";
     let drawing = false;
     let baseBrushSize = parseInt(sizeInput.value);
@@ -138,16 +141,17 @@
     const keys = {};
     const PAN_SPEED = 10;
     const ZOOM_SPEED = 0.05;
-    const MIN_ZOOM = 0.000000000000000000000001;
-    const MAX_ZOOM = 1000000;
+    const MIN_ZOOM = 0.1;
+    const MAX_ZOOM = 20;
 
-    // متغيرات جديدة للتعامل مع اللمس المتعدد
+    // متغيرات اللمس المتعدد
     let initialDistance = 0;
     let initialScale = 1;
     let initialOffsetX = 0;
     let initialOffsetY = 0;
     let initialMidpoint = { x: 0, y: 0 };
     let touchCount = 0;
+    let lastSingleTouch = null;
 
     function init() {
       resizeCanvas();
@@ -159,8 +163,16 @@
     }
 
     function resizeCanvas() {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      
+      // ضبط دقة الكانفاس حسب كثافة البكسل
+      canvas.width = width * dpr;
+      canvas.height = height * dpr;
+      canvas.style.width = width + 'px';
+      canvas.style.height = height + 'px';
+      
+      ctx.scale(dpr, dpr);
       redraw();
     }
 
@@ -178,7 +190,7 @@
       canvas.addEventListener("mouseup", handleMouseUp);
       canvas.addEventListener("wheel", handleWheel, { passive: false });
 
-      // ✅ لمس
+      // معالجات اللمس
       canvas.addEventListener("touchstart", handleTouchStart, { passive: false });
       canvas.addEventListener("touchmove", handleTouchMove, { passive: false });
       canvas.addEventListener("touchend", handleTouchEnd);
@@ -191,8 +203,8 @@
     function getTouchPos(touch) {
       const rect = canvas.getBoundingClientRect();
       return {
-        x: touch.clientX - rect.left,
-        y: touch.clientY - rect.top
+        x: (touch.clientX - rect.left) * dpr,
+        y: (touch.clientY - rect.top) * dpr
       };
     }
 
@@ -204,8 +216,8 @@
 
     function calculateMidpoint(touch1, touch2) {
       return {
-        x: (touch1.clientX + touch2.clientX) / 2,
-        y: (touch1.clientY + touch2.clientY) / 2
+        x: (touch1.clientX + touch2.clientX) / 2 * dpr,
+        y: (touch1.clientY + touch2.clientY) / 2 * dpr
       };
     }
 
@@ -215,9 +227,16 @@
       if (touchCount === 1) {
         e.preventDefault();
         const pos = getTouchPos(e.touches[0]);
+        lastSingleTouch = { x: pos.x, y: pos.y };
         startDraw(pos.x, pos.y);
       } else if (touchCount === 2) {
         e.preventDefault();
+        // إلغاء أي رسم عند وجود إصبعين
+        if (drawing) {
+          endDraw();
+          drawing = false;
+        }
+        
         initialDistance = calculateDistance(e.touches[0], e.touches[1]);
         initialScale = scale;
         initialOffsetX = offsetX;
@@ -232,9 +251,17 @@
       if (touchCount === 1 && !isPanning) {
         e.preventDefault();
         const pos = getTouchPos(e.touches[0]);
+        lastSingleTouch = { x: pos.x, y: pos.y };
         draw(pos.x, pos.y);
       } else if (touchCount === 2) {
         e.preventDefault();
+        
+        // منع الرسم نهائياً عند وجود إصبعين
+        if (drawing) {
+          endDraw();
+          drawing = false;
+        }
+        
         const currentDistance = calculateDistance(e.touches[0], e.touches[1]);
         const currentMidpoint = calculateMidpoint(e.touches[0], e.touches[1]);
         
@@ -245,7 +272,6 @@
           scale = Math.max(MIN_ZOOM, Math.min(scale, MAX_ZOOM));
           
           // حساب الإزاحة للحفاظ على نقطة المنتصف
-          const rect = canvas.getBoundingClientRect();
           const wx = (currentMidpoint.x - initialOffsetX) / initialScale;
           const wy = (currentMidpoint.y - initialOffsetY) / initialScale;
           offsetX = currentMidpoint.x - wx * scale;
@@ -263,33 +289,34 @@
     }
 
     function handleTouchEnd(e) {
-      if (touchCount === 1 && drawing) endDraw();
+      if (touchCount === 1 && drawing) {
+        endDraw();
+      }
       touchCount = e.touches.length;
       
-      // إذا بقي إصبع واحد بعد رفع أحد الأصابع، نبدأ الرسم
-      if (touchCount === 1) {
-        const pos = getTouchPos(e.touches[0]);
-        startDraw(pos.x, pos.y);
+      // إذا بقي إصبع واحد بعد رفع أحد الأصابع
+      if (touchCount === 1 && lastSingleTouch) {
+        startDraw(lastSingleTouch.x, lastSingleTouch.y);
       }
     }
 
     function handleMouseDown(e) {
       if (e.button === 1 || e.ctrlKey) {
         isPanning = true;
-        panStart = { x: e.clientX, y: e.clientY };
+        panStart = { x: e.clientX * dpr, y: e.clientY * dpr };
       } else {
-        startDraw(e.clientX, e.clientY);
+        startDraw(e.clientX * dpr, e.clientY * dpr);
       }
     }
 
     function handleMouseMove(e) {
       if (isPanning) {
-        offsetX += e.clientX - panStart.x;
-        offsetY += e.clientY - panStart.y;
-        panStart = { x: e.clientX, y: e.clientY };
+        offsetX += (e.clientX * dpr - panStart.x);
+        offsetY += (e.clientY * dpr - panStart.y);
+        panStart = { x: e.clientX * dpr, y: e.clientY * dpr };
         redraw();
       } else {
-        draw(e.clientX, e.clientY);
+        draw(e.clientX * dpr, e.clientY * dpr);
       }
     }
 
@@ -305,7 +332,7 @@
       e.preventDefault();
       const zoomFactor = Math.exp(-e.deltaY * 0.001);
       const rect = canvas.getBoundingClientRect();
-      handleZoom(e.clientX - rect.left, e.clientY - rect.top, zoomFactor);
+      handleZoom(e.clientX * dpr - rect.left, e.clientY * dpr - rect.top, zoomFactor);
     }
 
     function handleZoom(centerX, centerY, zoomFactor) {
@@ -361,34 +388,40 @@
 
     function redraw() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.save();
+      ctx.scale(dpr, dpr);
+      
       for (const path of paths) {
         ctx.beginPath();
         for (let i = 0; i < path.length; i++) {
           const p = path[i];
           const [sx, sy] = worldToScreen(p.x, p.y);
-          ctx.lineWidth = p.size * scale;
+          ctx.lineWidth = p.size * scale / dpr; // تعديل حجم الفرشاة حسب الدقة
           ctx.strokeStyle = p.color;
           ctx.lineCap = "round";
           ctx.lineJoin = "round";
-          if (i === 0) ctx.moveTo(sx, sy);
-          else ctx.lineTo(sx, sy);
+          if (i === 0) ctx.moveTo(sx / dpr, sy / dpr);
+          else ctx.lineTo(sx / dpr, sy / dpr);
         }
         ctx.stroke();
       }
+      
       if (drawing && currentPath.length > 0) {
         ctx.beginPath();
         for (let i = 0; i < currentPath.length; i++) {
           const p = currentPath[i];
           const [sx, sy] = worldToScreen(p.x, p.y);
-          ctx.lineWidth = p.size * scale;
+          ctx.lineWidth = p.size * scale / dpr;
           ctx.strokeStyle = p.color;
           ctx.lineCap = "round";
           ctx.lineJoin = "round";
-          if (i === 0) ctx.moveTo(sx, sy);
-          else ctx.lineTo(sx, sy);
+          if (i === 0) ctx.moveTo(sx / dpr, sy / dpr);
+          else ctx.lineTo(sx / dpr, sy / dpr);
         }
         ctx.stroke();
       }
+      
+      ctx.restore();
     }
 
     function updateZoomInfo() {
