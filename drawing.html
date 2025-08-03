@@ -107,7 +107,7 @@
     let offsetX = 0;
     let offsetY = 0;
     let scale = 1;
-    const MIN_ZOOM = 0.000000000000000000000001; // الحد الأدنى للزوم كما طلبت
+    const MIN_ZOOM = 0.000000000000000000000001;
     const MAX_ZOOM = 100;
     
     // تخزين المسارات والتحكم
@@ -118,13 +118,6 @@
     
     // متغيرات التحكم باللمس
     let touchCount = 0;
-    let isPanning = false;
-    let panStart = { x: 0, y: 0 };
-    let initialDistance = 0;
-    let initialScale = 1;
-    let initialOffsetX = 0;
-    let initialOffsetY = 0;
-    let initialMidpoint = { x: 0, y: 0 };
 
     function init() {
       resizeCanvas();
@@ -167,105 +160,49 @@
       };
     }
 
-    function calculateDistance(touch1, touch2) {
-      const dx = touch1.clientX - touch2.clientX;
-      const dy = touch1.clientY - touch2.clientY;
-      return Math.sqrt(dx * dx + dy * dy);
-    }
-
-    function calculateMidpoint(touch1, touch2) {
-      return {
-        x: (touch1.clientX + touch2.clientX) / 2,
-        y: (touch1.clientY + touch2.clientY) / 2
-      };
-    }
-
     function handleTouchStart(e) {
       touchCount = e.touches.length;
       
+      // الرسم بإصبع واحد فقط
       if (touchCount === 1) {
         e.preventDefault();
         const pos = getTouchPos(e.touches[0]);
         startDraw(pos.x, pos.y);
-      } else if (touchCount === 2) {
-        e.preventDefault();
-        isPanning = true;
-        initialDistance = calculateDistance(e.touches[0], e.touches[1]);
-        initialScale = scale;
-        initialOffsetX = offsetX;
-        initialOffsetY = offsetY;
-        initialMidpoint = calculateMidpoint(e.touches[0], e.touches[1]);
+      } else {
+        // إذا كان هناك أكثر من إصبع، نوقف الرسم الحالي
+        if (drawing) {
+          endDraw();
+          drawing = false;
+        }
       }
     }
 
     function handleTouchMove(e) {
       touchCount = e.touches.length;
       
-      if (touchCount === 1 && !isPanning) {
+      // الرسم بإصبع واحد فقط
+      if (touchCount === 1 && drawing) {
         e.preventDefault();
         const pos = getTouchPos(e.touches[0]);
         draw(pos.x, pos.y);
-      } else if (touchCount === 2) {
-        e.preventDefault();
-        
-        const currentDistance = calculateDistance(e.touches[0], e.touches[1]);
-        const currentMidpoint = calculateMidpoint(e.touches[0], e.touches[1]);
-        
-        // الزوم أولاً
-        if (Math.abs(currentDistance - initialDistance) > 5) {
-          const zoomFactor = currentDistance / initialDistance;
-          scale = initialScale * zoomFactor;
-          scale = Math.max(MIN_ZOOM, Math.min(scale, MAX_ZOOM));
-          
-          // حساب الإزاحة للحفاظ على نقطة المنتصف
-          const wx = (currentMidpoint.x - initialOffsetX) / initialScale;
-          const wy = (currentMidpoint.y - initialOffsetY) / initialScale;
-          offsetX = currentMidpoint.x - wx * scale;
-          offsetY = currentMidpoint.y - wy * scale;
-        } 
-        // ثم التحريك
-        else {
-          offsetX = initialOffsetX + (currentMidpoint.x - initialMidpoint.x);
-          offsetY = initialOffsetY + (currentMidpoint.y - initialMidpoint.y);
-        }
-        
-        updateZoomInfo();
-        redraw();
       }
     }
 
     function handleTouchEnd(e) {
       if (drawing) endDraw();
       touchCount = e.touches.length;
-      if (touchCount < 2) isPanning = false;
     }
 
     function handleMouseDown(e) {
-      if (e.button === 1 || e.ctrlKey) {
-        isPanning = true;
-        panStart = { x: e.clientX, y: e.clientY };
-      } else {
-        startDraw(e.clientX, e.clientY);
-      }
+      startDraw(e.clientX, e.clientY);
     }
 
     function handleMouseMove(e) {
-      if (isPanning) {
-        offsetX += e.clientX - panStart.x;
-        offsetY += e.clientY - panStart.y;
-        panStart = { x: e.clientX, y: e.clientY };
-        redraw();
-      } else {
-        draw(e.clientX, e.clientY);
-      }
+      draw(e.clientX, e.clientY);
     }
 
-    function handleMouseUp(e) {
-      if (isPanning) {
-        isPanning = false;
-      } else {
-        endDraw();
-      }
+    function handleMouseUp() {
+      endDraw();
     }
 
     function handleWheel(e) {
@@ -293,7 +230,7 @@
     function getCurrentBrushSize() { return baseBrushSize / Math.sqrt(scale); }
 
     function startDraw(x, y) {
-      if (isPanning || touchCount > 1) return;
+      if (touchCount > 1) return; // لا نرسم إذا كان هناك أكثر من إصبع
       
       const [wx, wy] = screenToWorld(x, y);
       currentPath = [{
@@ -307,7 +244,7 @@
     }
 
     function draw(x, y) {
-      if (!drawing || isPanning || touchCount > 1) return;
+      if (!drawing || touchCount > 1) return; // لا نرسم إذا كان هناك أكثر من إصبع
       
       const [wx, wy] = screenToWorld(x, y);
       currentPath.push({
