@@ -70,25 +70,6 @@
       font-size: 12px;
       z-index: 100;
     }
-    #controlsInfo {
-      position: fixed;
-      top: 10px;
-      right: 10px;
-      background: rgba(0, 0, 0, 0.5);
-      color: white;
-      padding: 5px 10px;
-      border-radius: 4px;
-      font-size: 12px;
-      z-index: 100;
-    }
-    #fileInput {
-      display: none;
-    }
-    @media (max-width: 768px) {
-      #controlsInfo {
-        display: none;
-      }
-    }
   </style>
 </head>
 <body>
@@ -126,8 +107,8 @@
     let offsetX = 0;
     let offsetY = 0;
     let scale = 1;
-    const MIN_ZOOM = 0.1;
-    const MAX_ZOOM = 20;
+    const MIN_ZOOM = 0.000000000000000000000001; // الحد الأدنى للزوم كما طلبت
+    const MAX_ZOOM = 100;
     
     // تخزين المسارات والتحكم
     let paths = [];
@@ -137,7 +118,8 @@
     
     // متغيرات التحكم باللمس
     let touchCount = 0;
-    let lastSingleTouch = null;
+    let isPanning = false;
+    let panStart = { x: 0, y: 0 };
     let initialDistance = 0;
     let initialScale = 1;
     let initialOffsetX = 0;
@@ -152,14 +134,8 @@
     }
 
     function resizeCanvas() {
-      const width = window.innerWidth;
-      const height = window.innerHeight;
-      
-      canvas.width = width;
-      canvas.height = height;
-      canvas.style.width = width + 'px';
-      canvas.style.height = height + 'px';
-      
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
       redraw();
     }
 
@@ -175,6 +151,7 @@
       canvas.addEventListener("mousedown", handleMouseDown);
       canvas.addEventListener("mousemove", handleMouseMove);
       canvas.addEventListener("mouseup", handleMouseUp);
+      canvas.addEventListener("wheel", handleWheel, { passive: false });
       
       // التحكم بحجم الفرشاة
       sizeInput.addEventListener("input", () => {
@@ -209,16 +186,10 @@
       if (touchCount === 1) {
         e.preventDefault();
         const pos = getTouchPos(e.touches[0]);
-        lastSingleTouch = pos;
         startDraw(pos.x, pos.y);
       } else if (touchCount === 2) {
         e.preventDefault();
-        // إيقاف الرسم إذا كان نشطًا
-        if (drawing) {
-          endDraw();
-          drawing = false;
-        }
-        
+        isPanning = true;
         initialDistance = calculateDistance(e.touches[0], e.touches[1]);
         initialScale = scale;
         initialOffsetX = offsetX;
@@ -230,10 +201,9 @@
     function handleTouchMove(e) {
       touchCount = e.touches.length;
       
-      if (touchCount === 1) {
+      if (touchCount === 1 && !isPanning) {
         e.preventDefault();
         const pos = getTouchPos(e.touches[0]);
-        lastSingleTouch = pos;
         draw(pos.x, pos.y);
       } else if (touchCount === 2) {
         e.preventDefault();
@@ -241,7 +211,7 @@
         const currentDistance = calculateDistance(e.touches[0], e.touches[1]);
         const currentMidpoint = calculateMidpoint(e.touches[0], e.touches[1]);
         
-        // الزوم عند تغير المسافة بين الأصابع
+        // الزوم أولاً
         if (Math.abs(currentDistance - initialDistance) > 5) {
           const zoomFactor = currentDistance / initialDistance;
           scale = initialScale * zoomFactor;
@@ -253,7 +223,7 @@
           offsetX = currentMidpoint.x - wx * scale;
           offsetY = currentMidpoint.y - wy * scale;
         } 
-        // التحريك عند تحريك الأصابع في نفس الاتجاه
+        // ثم التحريك
         else {
           offsetX = initialOffsetX + (currentMidpoint.x - initialMidpoint.x);
           offsetY = initialOffsetY + (currentMidpoint.y - initialMidpoint.y);
@@ -265,23 +235,55 @@
     }
 
     function handleTouchEnd(e) {
-      if (drawing) {
-        endDraw();
-      }
+      if (drawing) endDraw();
       touchCount = e.touches.length;
+      if (touchCount < 2) isPanning = false;
     }
 
     function handleMouseDown(e) {
-      if (e.button === 1 || e.ctrlKey) return; // تجاهل زر الماوس الأوسط
-      startDraw(e.clientX, e.clientY);
+      if (e.button === 1 || e.ctrlKey) {
+        isPanning = true;
+        panStart = { x: e.clientX, y: e.clientY };
+      } else {
+        startDraw(e.clientX, e.clientY);
+      }
     }
 
     function handleMouseMove(e) {
-      draw(e.clientX, e.clientY);
+      if (isPanning) {
+        offsetX += e.clientX - panStart.x;
+        offsetY += e.clientY - panStart.y;
+        panStart = { x: e.clientX, y: e.clientY };
+        redraw();
+      } else {
+        draw(e.clientX, e.clientY);
+      }
     }
 
-    function handleMouseUp() {
-      endDraw();
+    function handleMouseUp(e) {
+      if (isPanning) {
+        isPanning = false;
+      } else {
+        endDraw();
+      }
+    }
+
+    function handleWheel(e) {
+      e.preventDefault();
+      const zoomFactor = Math.exp(-e.deltaY * 0.001);
+      const rect = canvas.getBoundingClientRect();
+      handleZoom(e.clientX - rect.left, e.clientY - rect.top, zoomFactor);
+    }
+
+    function handleZoom(centerX, centerY, zoomFactor) {
+      const wx = (centerX - offsetX) / scale;
+      const wy = (centerY - offsetY) / scale;
+      scale *= zoomFactor;
+      scale = Math.max(MIN_ZOOM, Math.min(scale, MAX_ZOOM));
+      offsetX = centerX - wx * scale;
+      offsetY = centerY - wy * scale;
+      updateZoomInfo();
+      redraw();
     }
 
     function setTool(t) { tool = t; }
@@ -291,7 +293,7 @@
     function getCurrentBrushSize() { return baseBrushSize / Math.sqrt(scale); }
 
     function startDraw(x, y) {
-      if (touchCount > 1) return;
+      if (isPanning || touchCount > 1) return;
       
       const [wx, wy] = screenToWorld(x, y);
       currentPath = [{
@@ -305,7 +307,7 @@
     }
 
     function draw(x, y) {
-      if (!drawing || touchCount > 1) return;
+      if (!drawing || isPanning || touchCount > 1) return;
       
       const [wx, wy] = screenToWorld(x, y);
       currentPath.push({
