@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>تطبيق رسم</title>
+  <title>تطبيق رسم متقدم</title>
   <style>
     html, body {
       margin: 0;
@@ -36,34 +36,45 @@
       background: white;
       touch-action: none;
     }
+
+    .zoom-info {
+      position: fixed;
+      bottom: 10px;
+      left: 10px;
+      background: rgba(0,0,0,0.5);
+      color: white;
+      padding: 5px 10px;
+      border-radius: 5px;
+      font-size: 12px;
+    }
   </style>
 </head>
 <body>
 
 <div id="menu">
   <label>🎨 اللون: <input type="color" id="colorPicker" value="#000000"></label>
-  <label>🖌️ الحجم: <input type="range" id="brushSize" min="1" max="50" value="3"></label>
-  <button id="undoBtn">↩️ Undo</button>
-  <button id="redoBtn">↪️ Redo</button>
+  <label>🖌️ الحجم: <input type="number" id="brushSize" min="0.000000000000000000001" max="100000000000000000000000" value="3" step="1"></label>
+  <button id="zoomInBtn">➕ تكبير</button>
+  <button id="zoomOutBtn">➖ تصغير</button>
+  <button id="zoomToPointBtn">🔍 زوم لنقطة</button>
   <button id="clearBtn">🧹 مسح</button>
   <button id="saveBtn">💾 حفظ</button>
-  <button id="saveJsonBtn">💾 حفظ JSON</button>
-  <button id="loadJsonBtn">📂 فتح JSON</button>
 </div>
 
 <canvas id="canvas"></canvas>
+<div class="zoom-info" id="zoomInfo">زوم: 1x</div>
 
 <script>
   const canvas = document.getElementById("canvas");
   const ctx = canvas.getContext("2d");
   const colorPicker = document.getElementById("colorPicker");
   const brushSize = document.getElementById("brushSize");
-  const undoBtn = document.getElementById("undoBtn");
-  const redoBtn = document.getElementById("redoBtn");
+  const zoomInBtn = document.getElementById("zoomInBtn");
+  const zoomOutBtn = document.getElementById("zoomOutBtn");
+  const zoomToPointBtn = document.getElementById("zoomToPointBtn");
   const clearBtn = document.getElementById("clearBtn");
   const saveBtn = document.getElementById("saveBtn");
-  const saveJsonBtn = document.getElementById("saveJsonBtn");
-  const loadJsonBtn = document.getElementById("loadJsonBtn");
+  const zoomInfo = document.getElementById("zoomInfo");
 
   // Initialize canvas size
   let width = window.innerWidth;
@@ -73,7 +84,6 @@
 
   // Drawing state
   let paths = [];
-  let undonePaths = [];
   let currentPath = [];
   let drawing = false;
 
@@ -82,39 +92,13 @@
   let panX = 0;
   let panY = 0;
   let lastTouchDist = 0;
-  let isPanning = false;
   let isZooming = false;
   let touchStartX = 0;
   let touchStartY = 0;
 
-  // Save current state to JSON
-  function saveStateToJson() {
-    const state = {
-      paths: paths,
-      view: {
-        zoom: zoom,
-        panX: panX,
-        panY: panY
-      }
-    };
-    return JSON.stringify(state);
-  }
-
-  // Load state from JSON
-  function loadStateFromJson(json) {
-    try {
-      const state = JSON.parse(json);
-      paths = state.paths || [];
-      zoom = state.view?.zoom || 1;
-      panX = state.view?.panX || 0;
-      panY = state.view?.panY || 0;
-      undonePaths = [];
-      drawAll();
-      return true;
-    } catch (e) {
-      console.error("Failed to load JSON:", e);
-      return false;
-    }
+  // Update zoom info display
+  function updateZoomInfo() {
+    zoomInfo.textContent = `زوم: ${zoom.toExponential(2)}x`;
   }
 
   // Draw all paths with current transform
@@ -138,6 +122,7 @@
       }
       ctx.stroke();
     }
+    updateZoomInfo();
   }
 
   // Get canvas position from event
@@ -152,6 +137,23 @@
   // Calculate distance between two touches
   function distance(t1, t2) {
     return Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+  }
+
+  // Zoom to a specific point
+  function zoomToPoint(pointX, pointY, newZoom) {
+    // Calculate the canvas position before zoom
+    const canvasX = pointX * zoom + panX;
+    const canvasY = pointY * zoom + panY;
+    
+    // Apply new zoom
+    const prevZoom = zoom;
+    zoom = newZoom;
+    
+    // Adjust pan to keep the point at the same screen position
+    panX = canvasX - pointX * zoom;
+    panY = canvasY - pointY * zoom;
+    
+    drawAll();
   }
 
   // Touch events
@@ -171,7 +173,7 @@
       drawing = true;
       currentPath = {
         color: colorPicker.value,
-        size: brushSize.value,
+        size: parseFloat(brushSize.value),
         points: [pos]
       };
     }
@@ -186,22 +188,19 @@
       const centerX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
       const centerY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
       
+      // Get the canvas position under the center point
+      const rect = canvas.getBoundingClientRect();
+      const pointX = (centerX - rect.left - panX) / zoom;
+      const pointY = (centerY - rect.top - panY) / zoom;
+      
       // Calculate zoom factor
       const zoomFactor = newDist / lastTouchDist;
       const newZoom = zoom * zoomFactor;
       
-      // Limit zoom range
-      if (newZoom >= 0.1 && newZoom <= 10) {
-        // Adjust pan to zoom toward center
-        panX -= (centerX - touchStartX) * (zoomFactor - 1);
-        panY -= (centerY - touchStartY) * (zoomFactor - 1);
-        
-        zoom = newZoom;
+      // Limit zoom to very small and very large values
+      if (newZoom >= 1e-21 && newZoom <= 1e21) {
+        zoomToPoint(pointX, pointY, newZoom);
         lastTouchDist = newDist;
-        touchStartX = centerX;
-        touchStartY = centerY;
-        
-        drawAll();
       }
     } else if (drawing && e.touches.length === 1) {
       // Continue drawing
@@ -225,7 +224,6 @@
   canvas.addEventListener("touchend", (e) => {
     if (drawing && currentPath.points.length > 0) {
       paths.push(currentPath);
-      undonePaths = [];
     }
     drawing = false;
     isZooming = false;
@@ -237,7 +235,7 @@
     drawing = true;
     currentPath = {
       color: colorPicker.value,
-      size: brushSize.value,
+      size: parseFloat(brushSize.value),
       points: [pos]
     };
   });
@@ -262,7 +260,6 @@
   canvas.addEventListener("mouseup", () => {
     if (drawing && currentPath.points.length > 0) {
       paths.push(currentPath);
-      undonePaths = [];
     }
     drawing = false;
   });
@@ -270,7 +267,6 @@
   canvas.addEventListener("mouseleave", () => {
     if (drawing && currentPath.points.length > 0) {
       paths.push(currentPath);
-      undonePaths = [];
     }
     drawing = false;
   });
@@ -278,8 +274,31 @@
   // Button handlers
   clearBtn.addEventListener("click", () => {
     paths = [];
-    undonePaths = [];
     drawAll();
+  });
+
+  zoomInBtn.addEventListener("click", () => {
+    const centerX = width / 2;
+    const centerY = height / 2;
+    const rect = canvas.getBoundingClientRect();
+    const pointX = (centerX - rect.left - panX) / zoom;
+    const pointY = (centerY - rect.top - panY) / zoom;
+    zoomToPoint(pointX, pointY, zoom * 1.5);
+  });
+
+  zoomOutBtn.addEventListener("click", () => {
+    const centerX = width / 2;
+    const centerY = height / 2;
+    const rect = canvas.getBoundingClientRect();
+    const pointX = (centerX - rect.left - panX) / zoom;
+    const pointY = (centerY - rect.top - panY) / zoom;
+    zoomToPoint(pointX, pointY, zoom / 1.5);
+  });
+
+  zoomToPointBtn.addEventListener("click", () => {
+    const pointX = width / 2;
+    const pointY = height / 2;
+    zoomToPoint(pointX, pointY, 1); // Reset zoom to 1x centered
   });
 
   saveBtn.addEventListener("click", () => {
@@ -313,56 +332,6 @@
     link.download = 'drawing.png';
     link.href = tempCanvas.toDataURL();
     link.click();
-  });
-
-  undoBtn.addEventListener("click", () => {
-    if (paths.length > 0) {
-      undonePaths.push(paths.pop());
-      drawAll();
-    }
-  });
-
-  redoBtn.addEventListener("click", () => {
-    if (undonePaths.length > 0) {
-      paths.push(undonePaths.pop());
-      drawAll();
-    }
-  });
-
-  saveJsonBtn.addEventListener("click", () => {
-    const json = saveStateToJson();
-    const blob = new Blob([json], {type: 'application/json'});
-    const url = URL.createObjectURL(blob);
-    
-    const link = document.createElement('a');
-    link.download = 'drawing.json';
-    link.href = url;
-    link.click();
-    
-    // Clean up
-    setTimeout(() => URL.revokeObjectURL(url), 100);
-  });
-
-  loadJsonBtn.addEventListener("click", () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.json';
-    
-    input.onchange = e => {
-      const file = e.target.files[0];
-      if (!file) return;
-      
-      const reader = new FileReader();
-      reader.onload = event => {
-        const success = loadStateFromJson(event.target.result);
-        if (!success) {
-          alert('فشل تحميل الملف. يرجى التأكد من صيغة الملف.');
-        }
-      };
-      reader.readAsText(file);
-    };
-    
-    input.click();
   });
 
   // Handle window resize
