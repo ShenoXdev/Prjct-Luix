@@ -2,15 +2,16 @@
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>تطبيق رسم</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>رسم للموبايل</title>
   <style>
     body, html {
       margin: 0;
       padding: 0;
-      overflow: hidden;
       touch-action: none;
-      font-family: Arial, sans-serif;
+      overflow: hidden;
+      font-family: sans-serif;
+      background: #f0f0f0;
     }
 
     #menu {
@@ -18,26 +19,30 @@
       top: 0;
       right: 0;
       left: 0;
-      background: #f0f0f0;
+      background: #fff;
       padding: 10px;
       display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
       gap: 10px;
-      align-items: center;
       z-index: 10;
       box-shadow: 0 2px 5px rgba(0,0,0,0.2);
     }
 
-    #menu input[type="color"],
-    #menu input[type="range"],
+    #menu input,
     #menu button {
-      padding: 5px;
-      font-size: 14px;
+      font-size: 16px;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      flex: 1 1 auto;
+      min-width: 100px;
     }
 
     canvas {
       display: block;
       position: absolute;
-      top: 50px; /* تحت المنيو */
+      top: 80px; /* تحت المنيو */
       left: 0;
       right: 0;
       bottom: 0;
@@ -49,12 +54,10 @@
 <body>
 
   <div id="menu">
-    🎨 اللون:
-    <input type="color" id="colorPicker" value="#000000" />
-    🖌️ الحجم:
-    <input type="range" id="brushSize" min="1" max="50" value="3" />
-    <button id="clearBtn">🧹 مسح</button>
-    <button id="saveBtn">💾 حفظ</button>
+    🎨 <input type="color" id="colorPicker" value="#000000" />
+    🖌️ <input type="range" id="brushSize" min="1" max="50" value="5" />
+    🧹 <button id="clearBtn">مسح</button>
+    💾 <button id="saveBtn">حفظ</button>
   </div>
 
   <canvas id="canvas"></canvas>
@@ -73,15 +76,24 @@
 
     function resizeCanvas() {
       canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight - 50; // عشان المنيو
+      canvas.height = window.innerHeight - document.getElementById('menu').offsetHeight;
     }
 
     window.addEventListener('resize', resizeCanvas);
     resizeCanvas();
 
+    function getTouchPos(touch) {
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x: touch.clientX - rect.left,
+        y: touch.clientY - rect.top
+      };
+    }
+
     function startDrawing(x, y) {
       painting = true;
-      [lastX, lastY] = [x, y];
+      lastX = x;
+      lastY = y;
     }
 
     function draw(x, y) {
@@ -93,48 +105,42 @@
       ctx.lineWidth = brushSize.value;
       ctx.lineCap = 'round';
       ctx.stroke();
-      [lastX, lastY] = [x, y];
+      lastX = x;
+      lastY = y;
     }
 
     function stopDrawing() {
       painting = false;
     }
 
-    // Mouse events
-    canvas.addEventListener('mousedown', (e) => startDrawing(e.offsetX, e.offsetY));
-    canvas.addEventListener('mousemove', (e) => draw(e.offsetX, e.offsetY));
-    canvas.addEventListener('mouseup', stopDrawing);
-    canvas.addEventListener('mouseout', stopDrawing);
-
-    // Touch events
+    // Touch events only
     canvas.addEventListener('touchstart', (e) => {
       if (e.touches.length === 1) {
-        const touch = e.touches[0];
-        const rect = canvas.getBoundingClientRect();
-        startDrawing(touch.clientX - rect.left, touch.clientY - rect.top);
+        const pos = getTouchPos(e.touches[0]);
+        startDrawing(pos.x, pos.y);
       }
     });
 
     canvas.addEventListener('touchmove', (e) => {
       e.preventDefault();
       if (e.touches.length === 1) {
-        const touch = e.touches[0];
-        const rect = canvas.getBoundingClientRect();
-        draw(touch.clientX - rect.left, touch.clientY - rect.top);
+        const pos = getTouchPos(e.touches[0]);
+        draw(pos.x, pos.y);
       }
     });
 
     canvas.addEventListener('touchend', stopDrawing);
+    canvas.addEventListener('touchcancel', stopDrawing);
 
-    // Clear canvas
+    // Clear
     clearBtn.addEventListener('click', () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
     });
 
-    // Save image
+    // Save
     saveBtn.addEventListener('click', () => {
       const link = document.createElement('a');
-      link.download = 'my_drawing.png';
+      link.download = 'رسمتي.png';
       link.href = canvas.toDataURL();
       link.click();
     });
