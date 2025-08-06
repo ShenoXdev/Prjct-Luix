@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>تطبيق الرسم بالتحريك فقط</title>
+  <title>تطبيق الرسم النهائي</title>
   <style>
     html, body {
       margin: 0;
@@ -55,6 +55,7 @@
   <button id="redoBtn">↪️ إعادة</button>
   <button id="clearBtn">🧹 مسح</button>
   <button id="saveBtn">💾 حفظ</button>
+  <button id="openBtn">📂 فتح</button>
 </div>
 
 <canvas id="canvas"></canvas>
@@ -69,6 +70,7 @@
   const redoBtn = document.getElementById("redoBtn");
   const clearBtn = document.getElementById("clearBtn");
   const saveBtn = document.getElementById("saveBtn");
+  const openBtn = document.getElementById("openBtn");
   const zoomInfo = document.getElementById("zoomInfo");
 
   // Initialize canvas
@@ -83,14 +85,15 @@
   let currentPath = null;
   let isDrawing = false;
   let lastPoint = null;
-  const MIN_MOVE_DISTANCE = 2; // الحد الأدنى لمسافة الحركة بالبكسل
+  const MIN_MOVE_DISTANCE = 2;
 
-  // Zoom state
+  // Zoom state (with faster zoom)
   let zoom = 1;
   let panX = 0;
   let panY = 0;
   let isZooming = false;
   let lastTouchDist = 0;
+  const ZOOM_SPEED = 2.5; // زيادة سرعة الزوم
 
   function updateZoomInfo() {
     zoomInfo.textContent = `زوم: ${zoom.toExponential(2)}x`;
@@ -168,7 +171,7 @@
     else if (e.touches.length === 1 && !isZooming) {
       const pos = getCanvasPos(e.touches[0]);
       lastPoint = pos;
-      isDrawing = false; // لن نبدأ الرسم حتى يتحرك الإصبع
+      isDrawing = false;
     }
   });
 
@@ -188,7 +191,7 @@
         x: (center.x - canvas.getBoundingClientRect().left - panX) / zoom,
         y: (center.y - canvas.getBoundingClientRect().top - panY) / zoom
       };
-      zoomToPoint(point.x, point.y, zoom * (newDist / lastTouchDist));
+      zoomToPoint(point.x, point.y, zoom * Math.pow((newDist / lastTouchDist), ZOOM_SPEED));
       lastTouchDist = newDist;
     } 
     else if (e.touches.length === 1 && !isZooming) {
@@ -200,10 +203,8 @@
         return;
       }
       
-      // التحقق من أن الإصبع تحرك مسافة كافية
       if (distance(lastPoint, pos) >= MIN_MOVE_DISTANCE / zoom) {
         if (!isDrawing) {
-          // بدء مسار جديد
           currentPath = {
             color: colorPicker.value,
             size: parseFloat(brushSize.value),
@@ -211,7 +212,6 @@
           };
           isDrawing = true;
         } else {
-          // إضافة نقطة للمسار الحالي
           currentPath.points.push(pos);
         }
         lastPoint = pos;
@@ -232,7 +232,7 @@
     lastPoint = null;
   });
 
-  // Mouse events (for desktop)
+  // Mouse events
   canvas.addEventListener("mousedown", (e) => {
     const pos = getCanvasPos(e);
     lastPoint = pos;
@@ -306,6 +306,39 @@
     link.download = 'رسمتي.png';
     link.href = canvas.toDataURL();
     link.click();
+  });
+
+  openBtn.addEventListener("click", () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = e => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = event => {
+          const img = new Image();
+          img.onload = () => {
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            // تحويل الصورة إلى مسار رسم
+            paths.push({
+              color: '#000000',
+              size: 1,
+              points: [
+                {x: 0, y: 0},
+                {x: canvas.width, y: canvas.height}
+              ]
+            });
+            drawAll();
+          };
+          img.src = event.target.result;
+        };
+        reader.readAsDataURL(file);
+      }
+    };
+    input.click();
   });
 
   window.addEventListener("resize", () => {
