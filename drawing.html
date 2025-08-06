@@ -1,179 +1,174 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>رسم موبايل مع زووم وبان</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>رسم بلمس متعدد</title>
   <style>
-    body, html {
-      margin: 0;
-      padding: 0;
-      overflow: hidden;
-      touch-action: none;
+    html, body {
+      margin: 0; padding: 0; height: 100%; overflow: hidden;
+      touch-action: none; background: #eee;
     }
+
     canvas {
-      touch-action: none;
+      position: absolute;
+      top: 0; left: 0;
       background: white;
-      display: block;
+      touch-action: none;
+      transform-origin: 0 0;
     }
+
     #menu {
       position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      background: #f8f8f8;
-      padding: 8px;
-      display: flex;
-      gap: 10px;
+      top: 0; left: 0; right: 0;
+      display: flex; gap: 10px;
+      background: #fff; padding: 10px;
       z-index: 10;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    }
+
+    #menu * {
+      font-size: 18px;
     }
   </style>
 </head>
 <body>
+  <div id="menu">
+    🎨 <input type="color" id="colorPicker" />
+    🖌️ <input type="range" id="brushSize" min="1" max="50" value="5" />
+    🧹 <button id="clearBtn">مسح</button>
+    💾 <button id="saveBtn">حفظ</button>
+  </div>
 
-<div id="menu">
-  🎨 <input type="color" id="colorPicker" value="#000000">
-  🖌️ <input type="range" id="brushSize" min="1" max="50" value="5">
-  💾 <button onclick="saveImage()">حفظ</button>
-  🧹 <button onclick="clearCanvas()">مسح</button>
-</div>
+  <canvas id="canvas"></canvas>
 
-<canvas id="canvas"></canvas>
+  <script>
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+    const colorPicker = document.getElementById("colorPicker");
+    const brushSize = document.getElementById("brushSize");
+    const clearBtn = document.getElementById("clearBtn");
+    const saveBtn = document.getElementById("saveBtn");
 
-<script>
-const canvas = document.getElementById('canvas');
-const ctx = canvas.getContext('2d');
-let color = document.getElementById('colorPicker').value;
-let size = document.getElementById('brushSize').value;
+    let width = window.innerWidth;
+    let height = window.innerHeight - document.getElementById("menu").offsetHeight;
+    canvas.width = width;
+    canvas.height = height;
 
-let width = window.innerWidth;
-let height = window.innerHeight - document.getElementById("menu").offsetHeight;
-canvas.width = width;
-canvas.height = height;
+    let scale = 1;
+    let offsetX = 0;
+    let offsetY = 0;
+    let isDrawing = false;
+    let lastX, lastY;
+    let isZooming = false;
+    let zoomCooldown = false;
+    let lastTouchDist = 0;
+    let initialOffset = { x: 0, y: 0 };
 
-let drawing = false;
-let lastX = 0;
-let lastY = 0;
-let canDraw = true;
-let zoomDelayTimeout = null;
+    function getTouchPos(touch) {
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x: (touch.clientX - rect.left - offsetX) / scale,
+        y: (touch.clientY - rect.top - offsetY) / scale
+      };
+    }
 
-let scale = 1;
-let offsetX = 0;
-let offsetY = 0;
+    function distance(t1, t2) {
+      return Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+    }
 
-let lastDistance = null;
-let lastPan = null;
+    function setTransform() {
+      canvas.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${scale})`;
+    }
 
-function getTouchPos(touch) {
-  const rect = canvas.getBoundingClientRect();
-  return {
-    x: (touch.clientX - rect.left - offsetX) / scale,
-    y: (touch.clientY - rect.top - offsetY) / scale
-  };
-}
+    function startDrawing(x, y) {
+      if (zoomCooldown || isZooming) return;
+      isDrawing = true;
+      lastX = x;
+      lastY = y;
+    }
 
-canvas.addEventListener('touchstart', (e) => {
-  if (e.touches.length === 1 && canDraw) {
-    const pos = getTouchPos(e.touches[0]);
-    lastX = pos.x;
-    lastY = pos.y;
-    drawing = true;
-  } else if (e.touches.length === 2) {
-    // زووم
-    canDraw = false;
-    drawing = false;
-    lastDistance = getDistance(e.touches);
-    clearTimeout(zoomDelayTimeout);
-  } else if (e.touches.length === 3) {
-    // بان
-    canDraw = false;
-    drawing = false;
-    lastPan = getPanMidpoint(e.touches);
-    clearTimeout(zoomDelayTimeout);
-  }
-});
+    function draw(x, y) {
+      if (!isDrawing) return;
+      ctx.beginPath();
+      ctx.moveTo(lastX, lastY);
+      ctx.lineTo(x, y);
+      ctx.strokeStyle = colorPicker.value;
+      ctx.lineWidth = brushSize.value;
+      ctx.lineCap = "round";
+      ctx.stroke();
+      lastX = x;
+      lastY = y;
+    }
 
-canvas.addEventListener('touchmove', (e) => {
-  e.preventDefault();
+    function stopDrawing() {
+      isDrawing = false;
+    }
 
-  if (e.touches.length === 1 && drawing && canDraw) {
-    const pos = getTouchPos(e.touches[0]);
-    ctx.beginPath();
-    ctx.moveTo(lastX, lastY);
-    ctx.lineTo(pos.x, pos.y);
-    ctx.strokeStyle = color;
-    ctx.lineWidth = size;
-    ctx.lineCap = "round";
-    ctx.stroke();
-    lastX = pos.x;
-    lastY = pos.y;
-  } else if (e.touches.length === 2) {
-    // زووم
-    const newDistance = getDistance(e.touches);
-    const zoomFactor = newDistance / lastDistance;
-    scale *= zoomFactor;
-    lastDistance = newDistance;
-    updateTransform();
-  } else if (e.touches.length === 3) {
-    // بان
-    const newMid = getPanMidpoint(e.touches);
-    offsetX += (newMid.x - lastPan.x);
-    offsetY += (newMid.y - lastPan.y);
-    lastPan = newMid;
-    updateTransform();
-  }
-});
+    canvas.addEventListener("touchstart", (e) => {
+      const touches = e.touches;
 
-canvas.addEventListener('touchend', (e) => {
-  drawing = false;
-  if (e.touches.length === 0) {
-    zoomDelayTimeout = setTimeout(() => {
-      canDraw = true;
-    }, 2000);
-  }
-});
+      if (touches.length === 2) {
+        isZooming = true;
+        lastTouchDist = distance(touches[0], touches[1]);
+        zoomCooldown = true;
+        setTimeout(() => zoomCooldown = false, 2000);
+      }
 
-function getDistance(touches) {
-  const dx = touches[0].clientX - touches[1].clientX;
-  const dy = touches[0].clientY - touches[1].clientY;
-  return Math.sqrt(dx * dx + dy * dy);
-}
+      if (touches.length === 3) {
+        initialOffset.x = touches[0].clientX - offsetX;
+        initialOffset.y = touches[0].clientY - offsetY;
+      }
 
-function getPanMidpoint(touches) {
-  const x = (touches[0].clientX + touches[1].clientX + touches[2].clientX) / 3;
-  const y = (touches[0].clientY + touches[1].clientY + touches[2].clientY) / 3;
-  return { x, y };
-}
+      if (touches.length === 1 && !zoomCooldown) {
+        const pos = getTouchPos(touches[0]);
+        startDrawing(pos.x, pos.y);
+      }
+    });
 
-function updateTransform() {
-  canvas.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${scale})`;
-}
+    canvas.addEventListener("touchmove", (e) => {
+      e.preventDefault();
+      const touches = e.touches;
 
-function clearCanvas() {
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  offsetX = 0;
-  offsetY = 0;
-  scale = 1;
-  updateTransform();
-}
+      if (touches.length === 2) {
+        const newDist = distance(touches[0], touches[1]);
+        const delta = newDist - lastTouchDist;
+        scale += delta * 0.005;
+        if (scale < 0.2) scale = 0.2;
+        if (scale > 5) scale = 5;
+        lastTouchDist = newDist;
+        setTransform();
+        return;
+      }
 
-function saveImage() {
-  const link = document.createElement('a');
-  link.download = 'canvas.png';
-  link.href = canvas.toDataURL();
-  link.click();
-}
+      if (touches.length === 3) {
+        offsetX = touches[0].clientX - initialOffset.x;
+        offsetY = touches[0].clientY - initialOffset.y;
+        setTransform();
+        return;
+      }
 
-document.getElementById('colorPicker').addEventListener('input', e => {
-  color = e.target.value;
-});
+      if (touches.length === 1 && !zoomCooldown && !isZooming) {
+        const pos = getTouchPos(touches[0]);
+        draw(pos.x, pos.y);
+      }
+    });
 
-document.getElementById('brushSize').addEventListener('input', e => {
-  size = e.target.value;
-});
-</script>
+    canvas.addEventListener("touchend", (e) => {
+      stopDrawing();
+      if (e.touches.length < 2) isZooming = false;
+    });
 
+    clearBtn.addEventListener("click", () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    });
+
+    saveBtn.addEventListener("click", () => {
+      const link = document.createElement('a');
+      link.download = 'رسمتي.png';
+      link.href = canvas.toDataURL();
+      link.click();
+    });
+  </script>
 </body>
 </html>
