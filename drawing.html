@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>تطبيق الرسم مع ملفات JSON</title>
+  <title>تطبيق الرسم بنطاقات غير محدودة</title>
   <style>
     html, body {
       margin: 0;
@@ -54,8 +54,8 @@
   <button id="undoBtn">↩️ تراجع</button>
   <button id="redoBtn">↪️ إعادة</button>
   <button id="clearBtn">🧹 مسح</button>
-  <button id="saveBtn">💾 حفظ JSON</button>
-  <button id="openBtn">📂 فتح JSON</button>
+  <button id="saveBtn">💾 حفظ</button>
+  <button id="openBtn">📂 فتح</button>
 </div>
 
 <canvas id="canvas"></canvas>
@@ -94,8 +94,8 @@
   let isZooming = false;
   let lastTouchDist = 0;
   const ZOOM_SPEED = 2.5;
-  const MIN_ZOOM = 1e-24;
-  const MAX_ZOOM = 1e24;
+  const MIN_ZOOM = 1e-24; // 0.000000000000000000000001
+  const MAX_ZOOM = 1e24;  // 100000000000000000000000
 
   function updateZoomInfo() {
     zoomInfo.textContent = `زوم: ${zoom.toExponential(2)}x`;
@@ -155,68 +155,6 @@
     panX = canvasX - pointX * zoom;
     panY = canvasY - pointY * zoom;
     drawAll();
-  }
-
-  // Save as JSON
-  function saveAsJSON() {
-    const drawingData = {
-      version: "1.0",
-      paths: paths,
-      view: {
-        zoom: zoom,
-        panX: panX,
-        panY: panY
-      },
-      metadata: {
-        created: new Date().toISOString(),
-        width: width,
-        height: height
-      }
-    };
-
-    const jsonStr = JSON.stringify(drawingData, null, 2);
-    const blob = new Blob([jsonStr], {type: 'application/json'});
-    const url = URL.createObjectURL(blob);
-    
-    const link = document.createElement('a');
-    link.download = `رسمتي-${new Date().toISOString().slice(0,10)}.json`;
-    link.href = url;
-    link.click();
-    
-    setTimeout(() => URL.revokeObjectURL(url), 100);
-  }
-
-  // Open JSON file
-  function openJSON(file) {
-    const reader = new FileReader();
-    reader.onload = function(e) {
-      try {
-        const drawingData = JSON.parse(e.target.result);
-        
-        // Reset current state
-        paths = [];
-        undonePaths = [];
-        currentPath = null;
-        isDrawing = false;
-        
-        // Load paths if available
-        if (Array.isArray(drawingData.paths)) {
-          paths = drawingData.paths;
-        }
-        
-        // Restore view settings
-        if (drawingData.view)) {
-          zoom = drawingData.view.zoom || 1;
-          panX = drawingData.view.panX || 0;
-          panY = drawingData.view.panY || 0;
-        }
-        
-        drawAll();
-      } catch (error) {
-        alert('خطأ في تحميل الملف: ' + error.message);
-      }
-    };
-    reader.readAsText(file);
   }
 
   // Touch events
@@ -365,15 +303,40 @@
     drawAll();
   });
 
-  saveBtn.addEventListener("click", saveAsJSON);
+  saveBtn.addEventListener("click", () => {
+    const link = document.createElement('a');
+    link.download = 'رسمتي.png';
+    link.href = canvas.toDataURL();
+    link.click();
+  });
 
   openBtn.addEventListener("click", () => {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = '.json';
+    input.accept = 'image/*';
     input.onchange = e => {
-      if (e.target.files.length > 0) {
-        openJSON(e.target.files[0]);
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = event => {
+          const img = new Image();
+          img.onload = () => {
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            paths.push({
+              color: '#000000',
+              size: 1,
+              points: [
+                {x: 0, y: 0},
+                {x: canvas.width, y: canvas.height}
+              ]
+            });
+            drawAll();
+          };
+          img.src = event.target.result;
+        };
+        reader.readAsDataURL(file);
       }
     };
     input.click();
