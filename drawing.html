@@ -2,8 +2,8 @@
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
-  <title>رسم + زوم + بان + حفظ JSON</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>تطبيق رسم</title>
   <style>
     html, body {
       margin: 0;
@@ -12,19 +12,21 @@
       touch-action: none;
       font-family: sans-serif;
     }
+
     #menu {
       position: fixed;
       top: 0;
-      left: 0;
       right: 0;
-      background: #eee;
+      left: 0;
+      background: #f0f0f0;
       padding: 10px;
       display: flex;
-      align-items: center;
-      gap: 10px;
-      z-index: 10;
       flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      z-index: 10;
     }
+
     canvas {
       position: absolute;
       top: 50px;
@@ -39,11 +41,12 @@
 <body>
 
 <div id="menu">
-  اللون: <input type="color" id="colorPicker" value="#000000" />
-  الحجم: <input type="number" id="brushSize" min="1" max="100000000000000000000000" value="5" />
+  <label>🎨 اللون: <input type="color" id="colorPicker" value="#000000"></label>
+  <label>🖌️ الحجم: <input type="range" id="brushSize" min="1" max="50" value="3"></label>
+  <button id="undoBtn">↩️ Undo</button>
+  <button id="redoBtn">↪️ Redo</button>
   <button id="clearBtn">🧹 مسح</button>
   <button id="saveBtn">💾 حفظ</button>
-  <input type="file" id="loadFile" accept=".json" />
 </div>
 
 <canvas id="canvas"></canvas>
@@ -53,186 +56,143 @@
   const ctx = canvas.getContext("2d");
   const colorPicker = document.getElementById("colorPicker");
   const brushSize = document.getElementById("brushSize");
+  const undoBtn = document.getElementById("undoBtn");
+  const redoBtn = document.getElementById("redoBtn");
   const clearBtn = document.getElementById("clearBtn");
   const saveBtn = document.getElementById("saveBtn");
-  const loadFile = document.getElementById("loadFile");
 
   let width = window.innerWidth;
   let height = window.innerHeight - 50;
   canvas.width = width;
   canvas.height = height;
 
-  // Transform state
-  let scale = 1;
-  let offsetX = 0;
-  let offsetY = 0;
-
-  const minScale = 0.000000000000000000001;
-  const maxScale = 10;
-
-  // Drawing state
-  let isDrawing = false;
-  let lastX = 0, lastY = 0;
-  let isZooming = false;
-  let lastTouchDistance = 0;
-
-  const paths = [];
+  let paths = [];
+  let undonePaths = [];
   let currentPath = [];
 
-  function applyTransform() {
-    ctx.setTransform(scale, 0, 0, scale, offsetX, offsetY);
-  }
+  let drawing = false;
+  let zoom = 1;
+  let panX = 0;
+  let panY = 0;
+  let lastTouchDist = 0;
+  let isPanning = false;
+  let isZooming = false;
+  let touchTimeout = null;
 
-  function startDrawing(x, y) {
-    isDrawing = true;
-    currentPath = [{ x, y, color: colorPicker.value, size: brushSize.value }];
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    ctx.strokeStyle = colorPicker.value;
-    ctx.lineWidth = brushSize.value / scale;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-  }
-
-  function continueDrawing(x, y) {
-    ctx.lineTo(x, y);
-    ctx.stroke();
-    currentPath.push({ x, y });
-  }
-
-  function stopDrawing() {
-    isDrawing = false;
-    if (currentPath.length > 0) paths.push(currentPath);
-    currentPath = [];
-  }
-
-  function redrawAll() {
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
+  function drawAll() {
+    ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset transform
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    applyTransform();
-    for (const path of paths) {
-      if (path.length < 2) continue;
+    ctx.setTransform(zoom, 0, 0, zoom, panX, panY);
+
+    for (let path of paths) {
+      ctx.strokeStyle = path.color;
+      ctx.lineWidth = path.size;
+      ctx.lineCap = "round";
       ctx.beginPath();
-      ctx.moveTo(path[0].x, path[0].y);
-      ctx.strokeStyle = path[0].color;
-      ctx.lineWidth = path[0].size / scale;
-      for (let i = 1; i < path.length; i++) {
-        ctx.lineTo(path[i].x, path[i].y);
+      for (let i = 0; i < path.points.length - 1; i++) {
+        ctx.moveTo(path.points[i].x, path.points[i].y);
+        ctx.lineTo(path.points[i + 1].x, path.points[i + 1].y);
       }
       ctx.stroke();
     }
   }
 
+  function getCanvasPos(e) {
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: (e.clientX - rect.left - panX) / zoom,
+      y: (e.clientY - rect.top - panY) / zoom,
+    };
+  }
+
+  function distance(t1, t2) {
+    return Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+  }
+
   canvas.addEventListener("touchstart", (e) => {
-    if (e.touches.length === 1 && !isZooming) {
-      const x = (e.touches[0].clientX - offsetX) / scale;
-      const y = (e.touches[0].clientY - 50 - offsetY) / scale;
-      startDrawing(x, y);
-    } else if (e.touches.length === 2) {
+    if (e.touches.length === 2) {
       isZooming = true;
-      lastTouchDistance = getTouchDistance(e.touches);
+      lastTouchDist = distance(e.touches[0], e.touches[1]);
+      if (touchTimeout) clearTimeout(touchTimeout);
+    } else if (e.touches.length === 3) {
+      isPanning = true;
+    } else if (e.touches.length === 1 && !isZooming && !isPanning) {
+      const touch = e.touches[0];
+      const pos = getCanvasPos(touch);
+      drawing = true;
+      currentPath = {
+        color: colorPicker.value,
+        size: brushSize.value,
+        points: [pos],
+      };
     }
   });
 
   canvas.addEventListener("touchmove", (e) => {
     e.preventDefault();
-    if (e.touches.length === 1 && isDrawing && !isZooming) {
-      const x = (e.touches[0].clientX - offsetX) / scale;
-      const y = (e.touches[0].clientY - 50 - offsetY) / scale;
-      continueDrawing(x, y);
-    } else if (e.touches.length === 2) {
-      const newDist = getTouchDistance(e.touches);
-      const center = getTouchCenter(e.touches);
-      const zoomFactor = newDist / lastTouchDistance;
-      const newScale = scale * zoomFactor;
-      if (newScale >= minScale && newScale <= maxScale) {
-        offsetX = center.x - (center.x - offsetX) * zoomFactor;
-        offsetY = center.y - (center.y - offsetY) * zoomFactor;
-        scale = newScale;
-        lastTouchDistance = newDist;
-        redrawAll();
-      }
+    if (isZooming && e.touches.length === 2) {
+      const newDist = distance(e.touches[0], e.touches[1]);
+      const zoomFactor = newDist / lastTouchDist;
+      zoom *= zoomFactor;
+      lastTouchDist = newDist;
+      drawAll();
+    } else if (isPanning && e.touches.length === 3) {
+      panX += e.touches[0].movementX || 0;
+      panY += e.touches[0].movementY || 0;
+      drawAll();
+    } else if (drawing && e.touches.length === 1) {
+      const touch = e.touches[0];
+      const pos = getCanvasPos(touch);
+      currentPath.points.push(pos);
+      drawAll();
     }
-  }, { passive: false });
+  });
 
   canvas.addEventListener("touchend", (e) => {
-    stopDrawing();
-    if (e.touches.length < 2) isZooming = false;
+    if (drawing && currentPath.points.length > 0) {
+      paths.push(currentPath);
+      undonePaths = [];
+    }
+    drawing = false;
+    isZooming = false;
+    isPanning = false;
+    drawAll();
   });
 
-  // Mouse fallback
-  canvas.addEventListener("mousedown", (e) => {
-    const x = (e.offsetX - offsetX) / scale;
-    const y = (e.offsetY - offsetY) / scale;
-    startDrawing(x, y);
-  });
-
-  canvas.addEventListener("mousemove", (e) => {
-    if (!isDrawing) return;
-    const x = (e.offsetX - offsetX) / scale;
-    const y = (e.offsetY - offsetY) / scale;
-    continueDrawing(x, y);
-  });
-
-  canvas.addEventListener("mouseup", stopDrawing);
-  canvas.addEventListener("mouseout", stopDrawing);
-
-  // أدوات إضافية
   clearBtn.addEventListener("click", () => {
-    paths.length = 0;
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    offsetX = 0;
-    offsetY = 0;
-    scale = 1;
-    applyTransform();
+    paths = [];
+    undonePaths = [];
+    drawAll();
   });
 
   saveBtn.addEventListener("click", () => {
-    const data = {
-      paths,
-      offsetX,
-      offsetY,
-      scale
-    };
-    const json = JSON.stringify(data);
-    const blob = new Blob([json], { type: "application/json" });
-    const link = document.createElement('a');
-    link.download = "drawing.json";
-    link.href = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.download = "drawing.png";
+    link.href = canvas.toDataURL();
     link.click();
   });
 
-  loadFile.addEventListener("change", (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = function(evt) {
-      const data = JSON.parse(evt.target.result);
-      paths.length = 0;
-      paths.push(...data.paths);
-      offsetX = data.offsetX;
-      offsetY = data.offsetY;
-      scale = data.scale;
-      redrawAll();
-    };
-    reader.readAsText(file);
+  undoBtn.addEventListener("click", () => {
+    if (paths.length > 0) {
+      undonePaths.push(paths.pop());
+      drawAll();
+    }
   });
 
-  function getTouchCenter(touches) {
-    const x = (touches[0].clientX + touches[1].clientX) / 2;
-    const y = (touches[0].clientY + touches[1].clientY) / 2 - 50;
-    return { x, y };
-  }
+  redoBtn.addEventListener("click", () => {
+    if (undonePaths.length > 0) {
+      paths.push(undonePaths.pop());
+      drawAll();
+    }
+  });
 
-  function getTouchDistance(touches) {
-    const dx = touches[0].clientX - touches[1].clientX;
-    const dy = touches[0].clientY - touches[1].clientY;
-    return Math.sqrt(dx * dx + dy * dy);
-  }
-
-  applyTransform();
+  window.addEventListener("resize", () => {
+    width = window.innerWidth;
+    height = window.innerHeight - 50;
+    canvas.width = width;
+    canvas.height = height;
+    drawAll();
+  });
 </script>
-
 </body>
 </html>
