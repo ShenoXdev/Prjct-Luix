@@ -95,6 +95,8 @@
   let undonePaths = [];
   let currentPath = [];
   let drawing = false;
+  let waitingForZoom = false;
+  let zoomTimeout = null;
 
   // Zoom and pan state
   let zoom = 1;
@@ -214,13 +216,22 @@
     e.preventDefault();
     
     if (e.touches.length === 2) {
-      // Start zooming
-      isZooming = true;
+      // Start potential zoom (wait for 2 seconds to confirm)
+      waitingForZoom = true;
+      isZooming = false;
       lastTouchDist = distance(e.touches[0], e.touches[1]);
       touchStartX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
       touchStartY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-    } else if (e.touches.length === 1 && !isZooming) {
-      // Start drawing
+      
+      // Set timeout to confirm zoom after 2 seconds
+      zoomTimeout = setTimeout(() => {
+        if (waitingForZoom && e.touches.length === 2) {
+          isZooming = true;
+          waitingForZoom = false;
+        }
+      }, 2000);
+    } else if (e.touches.length === 1 && !waitingForZoom && !isZooming) {
+      // Start drawing immediately
       const touch = e.touches[0];
       const pos = getCanvasPos(touch);
       drawing = true;
@@ -250,8 +261,9 @@
       const zoomFactor = newDist / lastTouchDist;
       zoomToPoint(pointX, pointY, zoom * zoomFactor);
       lastTouchDist = newDist;
-    } else if (drawing && e.touches.length === 1) {
-      // Continue drawing
+    } 
+    else if (drawing && e.touches.length === 1 && !waitingForZoom) {
+      // Continue drawing only if not waiting for zoom
       const touch = e.touches[0];
       const pos = getCanvasPos(touch);
       currentPath.points.push(pos);
@@ -267,15 +279,48 @@
       ctx.lineTo(pos.x, pos.y);
       ctx.stroke();
     }
+    else if (waitingForZoom && e.touches.length === 1) {
+      // If waiting for zoom but now only one finger, cancel zoom and start drawing
+      clearTimeout(zoomTimeout);
+      waitingForZoom = false;
+      
+      const touch = e.touches[0];
+      const pos = getCanvasPos(touch);
+      drawing = true;
+      currentPath = {
+        color: colorPicker.value,
+        size: parseFloat(brushSize.value),
+        points: [pos]
+      };
+    }
   });
 
   canvas.addEventListener("touchend", (e) => {
+    if (zoomTimeout) {
+      clearTimeout(zoomTimeout);
+      zoomTimeout = null;
+    }
+    
     if (drawing && currentPath.points.length > 0) {
       paths.push(currentPath);
       undonePaths = [];
     }
+    
     drawing = false;
+    waitingForZoom = false;
     isZooming = false;
+    
+    // If only one finger remains and we were zooming, start drawing with it
+    if (e.touches.length === 1 && isZooming) {
+      const touch = e.touches[0];
+      const pos = getCanvasPos(touch);
+      drawing = true;
+      currentPath = {
+        color: colorPicker.value,
+        size: parseFloat(brushSize.value),
+        points: [pos]
+      };
+    }
   });
 
   // Mouse events (for desktop)
