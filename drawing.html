@@ -70,7 +70,7 @@
     let isZooming = false;
     let isPanning = false;
     let lastTouchDistance = 0;
-    let lastTouches = [];
+    let lastTouchCenter = { x: 0, y: 0 };
 
     function getTouchCenter(touches) {
       const x = (touches[0].clientX + touches[1].clientX) / 2;
@@ -84,71 +84,87 @@
       return Math.sqrt(dx * dx + dy * dy);
     }
 
+    function applyTransform() {
+      ctx.setTransform(scale, 0, 0, scale, offsetX, offsetY);
+    }
+
     canvas.addEventListener("touchstart", (e) => {
       if (e.touches.length === 1) {
         // Start drawing
         if (!isZooming && !isPanning) {
-          const x = (e.touches[0].clientX - offsetX) / scale;
-          const y = (e.touches[0].clientY - 50 - offsetY) / scale;
+          const touch = e.touches[0];
+          const x = (touch.clientX - offsetX) / scale;
+          const y = (touch.clientY - 50 - offsetY) / scale;
           lastX = x;
           lastY = y;
           isDrawing = true;
+          
+          // Start new path for smooth drawing
+          ctx.beginPath();
+          ctx.moveTo(x, y);
+          ctx.strokeStyle = colorPicker.value;
+          ctx.lineWidth = brushSize.value / scale; // Adjust brush size based on scale
+          ctx.lineCap = "round";
+          ctx.lineJoin = "round";
         }
       } else if (e.touches.length === 2) {
         isZooming = true;
+        isDrawing = false;
         lastTouchDistance = getTouchDistance(e.touches);
-        lastTouches = [...e.touches];
-      } else if (e.touches.length === 3) {
-        isPanning = true;
-        lastTouches = [...e.touches];
+        lastTouchCenter = getTouchCenter(e.touches);
       }
     });
 
     canvas.addEventListener("touchmove", (e) => {
       e.preventDefault();
+      
       if (e.touches.length === 1 && isDrawing) {
-        const x = (e.touches[0].clientX - offsetX) / scale;
-        const y = (e.touches[0].clientY - 50 - offsetY) / scale;
-        ctx.beginPath();
-        ctx.moveTo(lastX, lastY);
+        const touch = e.touches[0];
+        const x = (touch.clientX - offsetX) / scale;
+        const y = (touch.clientY - 50 - offsetY) / scale;
+        
+        // Continue drawing
         ctx.lineTo(x, y);
-        ctx.strokeStyle = colorPicker.value;
-        ctx.lineWidth = brushSize.value;
-        ctx.lineCap = "round";
         ctx.stroke();
+        
         lastX = x;
         lastY = y;
       } else if (e.touches.length === 2 && isZooming) {
         const newDist = getTouchDistance(e.touches);
         const center = getTouchCenter(e.touches);
-        const scaleChange = newDist / lastTouchDistance;
-        const prevScale = scale;
-        scale *= scaleChange;
-        scale = Math.max(0.1, Math.min(scale, 10));
-        offsetX = center.x - ((center.x - offsetX) * (scale / prevScale));
-        offsetY = center.y - ((center.y - offsetY) * (scale / prevScale));
-        lastTouchDistance = newDist;
-      } else if (e.touches.length === 3 && isPanning) {
-        const dx = e.touches[0].clientX - lastTouches[0].clientX;
-        const dy = e.touches[0].clientY - lastTouches[0].clientY;
-        offsetX += dx;
-        offsetY += dy;
-        lastTouches = [...e.touches];
+        
+        // Calculate zoom factor
+        const zoomFactor = newDist / lastTouchDistance;
+        const newScale = scale * zoomFactor;
+        
+        // Limit zoom range
+        if (newScale >= 0.1 && newScale <= 10) {
+          // Adjust offset to zoom toward touch center
+          offsetX = center.x - (center.x - offsetX) * zoomFactor;
+          offsetY = center.y - (center.y - offsetY) * zoomFactor;
+          scale = newScale;
+          
+          lastTouchDistance = newDist;
+          lastTouchCenter = center;
+        }
+      } else if (e.touches.length === 3) {
+        // Pan with three fingers
+        const touch = e.touches[0];
+        const prevTouch = [...e.touches].find(t => t.identifier === touch.identifier);
+        
+        if (prevTouch) {
+          offsetX += touch.clientX - prevTouch.clientX;
+          offsetY += touch.clientY - prevTouch.clientY;
+        }
       }
+      
+      applyTransform();
     }, { passive: false });
 
     canvas.addEventListener("touchend", (e) => {
       isDrawing = false;
       if (e.touches.length < 2) isZooming = false;
-      if (e.touches.length < 3) isPanning = false;
     });
-
-    // Render transformation
-    function renderTransform() {
-      ctx.setTransform(scale, 0, 0, scale, offsetX, offsetY);
-      requestAnimationFrame(renderTransform);
-    }
-    renderTransform();
 
     // Mouse fallback (for PC use)
     canvas.addEventListener("mousedown", (e) => {
@@ -157,19 +173,23 @@
       lastX = x;
       lastY = y;
       isDrawing = true;
+      
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.strokeStyle = colorPicker.value;
+      ctx.lineWidth = brushSize.value / scale;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
     });
 
     canvas.addEventListener("mousemove", (e) => {
       if (isDrawing) {
         const x = (e.offsetX - offsetX) / scale;
         const y = (e.offsetY - offsetY) / scale;
-        ctx.beginPath();
-        ctx.moveTo(lastX, lastY);
+        
         ctx.lineTo(x, y);
-        ctx.strokeStyle = colorPicker.value;
-        ctx.lineWidth = brushSize.value;
-        ctx.lineCap = "round";
         ctx.stroke();
+        
         lastX = x;
         lastY = y;
       }
@@ -185,15 +205,30 @@
       offsetX = 0;
       offsetY = 0;
       scale = 1;
+      applyTransform();
     });
 
     // Save canvas
     saveBtn.addEventListener("click", () => {
+      // Create a temporary canvas to save the content without transform
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = canvas.width;
+      tempCanvas.height = canvas.height;
+      const tempCtx = tempCanvas.getContext('2d');
+      
+      // Apply the current transform to draw the content
+      tempCtx.setTransform(1, 0, 0, 1, 0, 0);
+      tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
+      tempCtx.drawImage(canvas, 0, 0);
+      
       const link = document.createElement('a');
       link.download = 'drawing.png';
-      link.href = canvas.toDataURL();
+      link.href = tempCanvas.toDataURL();
       link.click();
     });
+
+    // Initialize transform
+    applyTransform();
   </script>
 
 </body>
