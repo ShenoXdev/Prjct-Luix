@@ -1,230 +1,272 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>Mobile Drawing</title>
+  <title>تطبيق رسم متقدم</title>
   <style>
     html, body {
       margin: 0;
       padding: 0;
       overflow: hidden;
-      height: 100%;
       touch-action: none;
-      user-select: none;
+      font-family: sans-serif;
     }
-    canvas {
-      background: #fff;
-      touch-action: none;
-    }
-    #ui {
+    #menu {
       position: fixed;
-      top: 10px;
-      left: 10px;
-      background: rgba(255,255,255,0.8);
-      border-radius: 10px;
+      top: 0;
+      right: 0;
+      left: 0;
+      background: #f0f0f0;
       padding: 10px;
       display: flex;
-      gap: 5px;
       flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
       z-index: 10;
     }
-    #ui > * {
-      font-size: 16px;
+    canvas {
+      position: absolute;
+      top: 50px;
+      left: 0;
+      width: 100%;
+      height: calc(100% - 50px);
+      background: white;
+      touch-action: none;
+    }
+    .zoom-info {
+      position: fixed;
+      bottom: 10px;
+      left: 10px;
+      background: rgba(0,0,0,0.5);
+      color: white;
+      padding: 5px 10px;
+      border-radius: 5px;
+      font-size: 12px;
     }
   </style>
 </head>
 <body>
-  <div id="ui">
-    <input type="color" id="colorPicker" value="#000000" />
-    <input type="number" id="brushSize" value="4" min="1" max="1000" />
-    <button id="undoBtn">Undo</button>
-    <button id="redoBtn">Redo</button>
-  </div>
-  <canvas id="canvas"></canvas>
 
-  <script>
-    const canvas = document.getElementById("canvas");
-    const ctx = canvas.getContext("2d");
-    const colorPicker = document.getElementById("colorPicker");
-    const brushSize = document.getElementById("brushSize");
-    const undoBtn = document.getElementById("undoBtn");
-    const redoBtn = document.getElementById("redoBtn");
+<div id="menu">
+  <label>🎨 اللون: <input type="color" id="colorPicker" value="#000000"></label>
+  <label>🖌️ الحجم: <input type="number" id="brushSize" min="1" max="100" value="3" step="1"></label>
+  <button id="undoBtn">↩️ تراجع</button>
+  <button id="redoBtn">↪️ إعادة</button>
+  <button id="clearBtn">🧹 مسح</button>
+  <button id="saveBtn">💾 حفظ</button>
+</div>
 
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+<canvas id="canvas"></canvas>
+<div class="zoom-info" id="zoomInfo">زوم: 1x</div>
 
-    let drawing = false;
-    let currentPath = null;
-    let paths = [];
-    let undonePaths = [];
+<script>
+  const canvas = document.getElementById("canvas");
+  const ctx = canvas.getContext("2d");
+  const colorPicker = document.getElementById("colorPicker");
+  const brushSize = document.getElementById("brushSize");
+  const undoBtn = document.getElementById("undoBtn");
+  const redoBtn = document.getElementById("redoBtn");
+  const clearBtn = document.getElementById("clearBtn");
+  const saveBtn = document.getElementById("saveBtn");
+  const zoomInfo = document.getElementById("zoomInfo");
 
-    let isZooming = false;
-    let isPanning = false;
-    let lastTouchDist = 0;
-    let zoom = 1;
-    let offsetX = 0, offsetY = 0;
-    let startOffsetX = 0, startOffsetY = 0;
-    let touchStartX = 0, touchStartY = 0;
+  // Initialize canvas
+  let width = window.innerWidth;
+  let height = window.innerHeight - 50;
+  canvas.width = width;
+  canvas.height = height;
 
-    // منع الرسم لمدة 2 ثانية بعد الزوم
-    let allowDrawAfterZoom = true;
-    let zoomTouchTimer = null;
+  // Drawing state
+  let paths = [];
+  let undonePaths = [];
+  let currentPath = [];
+  let isDrawing = false;
 
-    function getCanvasPos(touch) {
-      const rect = canvas.getBoundingClientRect();
-      return {
-        x: (touch.clientX - rect.left - offsetX) / zoom,
-        y: (touch.clientY - rect.top - offsetY) / zoom
-      };
-    }
+  // Zoom state
+  let zoom = 1;
+  let panX = 0;
+  let panY = 0;
+  let isZooming = false;
+  let zoomTimeout = null;
+  const ZOOM_DELAY = 2000; // تأخير ثانيتين بالضبط
 
-    function distance(p1, p2) {
-      return Math.hypot(p1.clientX - p2.clientX, p1.clientY - p2.clientY);
-    }
+  function updateZoomInfo() {
+    zoomInfo.textContent = `زوم: ${zoom.toExponential(2)}x`;
+  }
 
-    function drawAll() {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.save();
-      ctx.translate(offsetX, offsetY);
-      ctx.scale(zoom, zoom);
-      for (const path of paths) {
-        ctx.strokeStyle = path.color;
-        ctx.lineWidth = path.size;
-        ctx.lineJoin = ctx.lineCap = "round";
-        ctx.beginPath();
-        for (let i = 0; i < path.points.length; i++) {
-          const p = path.points[i];
-          if (i === 0) {
-            ctx.moveTo(p.x, p.y);
-          } else {
-            ctx.lineTo(p.x, p.y);
-          }
-        }
-        ctx.stroke();
+  function drawAll() {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.setTransform(zoom, 0, 0, zoom, panX, panY);
+
+    paths.forEach(path => {
+      ctx.strokeStyle = path.color;
+      ctx.lineWidth = path.size;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.beginPath();
+      ctx.moveTo(path.points[0].x, path.points[0].y);
+      for (let i = 1; i < path.points.length; i++) {
+        ctx.lineTo(path.points[i].x, path.points[i].y);
       }
-      ctx.restore();
-    }
-
-    canvas.addEventListener("touchstart", (e) => {
-      e.preventDefault();
-
-      if (e.touches.length === 3) {
-        isPanning = true;
-        touchStartX = e.touches[0].clientX;
-        touchStartY = e.touches[0].clientY;
-        startOffsetX = offsetX;
-        startOffsetY = offsetY;
-        return;
-      }
-
-      if (e.touches.length === 2) {
-        isZooming = true;
-        allowDrawAfterZoom = false;
-        lastTouchDist = distance(e.touches[0], e.touches[1]);
-        touchStartX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-        touchStartY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-
-        if (zoomTouchTimer) clearTimeout(zoomTouchTimer);
-        zoomTouchTimer = setTimeout(() => {
-          allowDrawAfterZoom = true;
-        }, 2000);
-        return;
-      }
-
-      if (e.touches.length === 1 && allowDrawAfterZoom && !isZooming && !isPanning) {
-        const touch = e.touches[0];
-        const pos = getCanvasPos(touch);
-        drawing = true;
-        currentPath = {
-          color: colorPicker.value,
-          size: parseFloat(brushSize.value),
-          points: [pos]
-        };
-      }
+      ctx.stroke();
     });
+    updateZoomInfo();
+  }
 
-    canvas.addEventListener("touchmove", (e) => {
-      e.preventDefault();
+  function getCanvasPos(e) {
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: (e.clientX - rect.left - panX) / zoom,
+      y: (e.clientY - rect.top - panY) / zoom
+    };
+  }
 
-      if (isPanning && e.touches.length === 3) {
-        const dx = e.touches[0].clientX - touchStartX;
-        const dy = e.touches[0].clientY - touchStartY;
-        offsetX = startOffsetX + dx;
-        offsetY = startOffsetY + dy;
-        drawAll();
-        return;
-      }
+  function distance(t1, t2) {
+    return Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+  }
 
-      if (isZooming && e.touches.length === 2) {
-        const newDist = distance(e.touches[0], e.touches[1]);
-        const scale = newDist / lastTouchDist;
-        const newZoom = zoom * scale;
-
-        const centerX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-        const centerY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-
-        offsetX = centerX - (centerX - offsetX) * (newZoom / zoom);
-        offsetY = centerY - (centerY - offsetY) * (newZoom / zoom);
-
-        zoom = newZoom;
-        lastTouchDist = newDist;
-        drawAll();
-        return;
-      }
-
-      if (drawing && e.touches.length === 1) {
-        const touch = e.touches[0];
-        const pos = getCanvasPos(touch);
-        currentPath.points.push(pos);
-        paths.push(currentPath);
-        currentPath = {
-          ...currentPath,
-          points: [pos]
-        };
-        drawAll();
-      }
-    });
-
-    canvas.addEventListener("touchend", (e) => {
-      if (drawing && currentPath.points.length > 0) {
-        paths.push(currentPath);
-        undonePaths = [];
-      }
-
-      if (e.touches.length === 0) {
-        isZooming = false;
-        isPanning = false;
-        drawing = false;
-        allowDrawAfterZoom = true;
-        if (zoomTouchTimer) {
-          clearTimeout(zoomTouchTimer);
-          zoomTouchTimer = null;
-        }
-      }
-    });
-
-    undoBtn.addEventListener("click", () => {
-      if (paths.length > 0) {
-        undonePaths.push(paths.pop());
-        drawAll();
-      }
-    });
-
-    redoBtn.addEventListener("click", () => {
-      if (undonePaths.length > 0) {
-        paths.push(undonePaths.pop());
-        drawAll();
-      }
-    });
-
-    window.addEventListener("resize", () => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-      drawAll();
-    });
-
+  function zoomToPoint(pointX, pointY, newZoom) {
+    const canvasX = pointX * zoom + panX;
+    const canvasY = pointY * zoom + panY;
+    zoom = Math.max(0.1, Math.min(newZoom, 10));
+    panX = canvasX - pointX * zoom;
+    panY = canvasY - pointY * zoom;
     drawAll();
-  </script>
+  }
+
+  // Touch events
+  canvas.addEventListener("touchstart", (e) => {
+    e.preventDefault();
+    
+    if (e.touches.length === 2) {
+      // بدء عملية زوم محتملة
+      isZooming = false;
+      
+      // تأخير ثانيتين قبل اعتبارها عملية زوم
+      zoomTimeout = setTimeout(() => {
+        if (e.touches.length === 2) {
+          isZooming = true;
+          lastTouchDist = distance(e.touches[0], e.touches[1]);
+          touchCenter = {
+            x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+            y: (e.touches[0].clientY + e.touches[1].clientY) / 2
+          };
+        }
+      }, ZOOM_DELAY);
+    } 
+    else if (e.touches.length === 1 && !zoomTimeout) {
+      // بدء الرسم فوراً إذا لم يكن هناك تأخير زوم
+      startDrawing(e.touches[0]);
+    }
+  });
+
+  function startDrawing(touch) {
+    const pos = getCanvasPos(touch);
+    isDrawing = true;
+    currentPath = {
+      color: colorPicker.value,
+      size: parseFloat(brushSize.value),
+      points: [pos]
+    };
+  }
+
+  canvas.addEventListener("touchmove", (e) => {
+    e.preventDefault();
+    
+    if (isZooming && e.touches.length === 2) {
+      // معالجة الزوم
+      const newDist = distance(e.touches[0], e.touches[1]);
+      const center = {
+        x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+        y: (e.touches[0].clientY + e.touches[1].clientY) / 2
+      };
+      const point = {
+        x: (center.x - canvas.getBoundingClientRect().left - panX) / zoom,
+        y: (center.y - canvas.getBoundingClientRect().top - panY) / zoom
+      };
+      zoomToPoint(point.x, point.y, zoom * (newDist / lastTouchDist));
+      lastTouchDist = newDist;
+    } 
+    else if (isDrawing && e.touches.length === 1 && !isZooming) {
+      // الاستمرار في الرسم
+      const touch = e.touches[0];
+      const pos = getCanvasPos(touch);
+      currentPath.points.push(pos);
+      
+      ctx.strokeStyle = currentPath.color;
+      ctx.lineWidth = currentPath.size;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(currentPath.points[currentPath.points.length-2].x, 
+                currentPath.points[currentPath.points.length-2].y);
+      ctx.lineTo(pos.x, pos.y);
+      ctx.stroke();
+    }
+    else if (zoomTimeout && e.touches.length === 1) {
+      // إذا أصبحت لمسة واحدة أثناء فترة الانتظار، ابدأ الرسم
+      clearTimeout(zoomTimeout);
+      zoomTimeout = null;
+      startDrawing(e.touches[0]);
+    }
+  });
+
+  canvas.addEventListener("touchend", (e) => {
+    if (zoomTimeout) {
+      clearTimeout(zoomTimeout);
+      zoomTimeout = null;
+    }
+    
+    if (isDrawing && currentPath.points.length > 0) {
+      paths.push(currentPath);
+      undonePaths = [];
+    }
+    
+    isDrawing = false;
+    isZooming = false;
+  });
+
+  // بقية الأحداث والأزرار...
+  undoBtn.addEventListener("click", () => {
+    if (paths.length > 0) {
+      undonePaths.push(paths.pop());
+      drawAll();
+    }
+  });
+
+  redoBtn.addEventListener("click", () => {
+    if (undonePaths.length > 0) {
+      paths.push(undonePaths.pop());
+      drawAll();
+    }
+  });
+
+  clearBtn.addEventListener("click", () => {
+    paths = [];
+    undonePaths = [];
+    zoom = 1;
+    panX = 0;
+    panY = 0;
+    drawAll();
+  });
+
+  saveBtn.addEventListener("click", () => {
+    const link = document.createElement('a');
+    link.download = 'رسمتي.png';
+    link.href = canvas.toDataURL();
+    link.click();
+  });
+
+  window.addEventListener("resize", () => {
+    width = window.innerWidth;
+    height = window.innerHeight - 50;
+    canvas.width = width;
+    canvas.height = height;
+    drawAll();
+  });
+
+  drawAll();
+</script>
 </body>
 </html>
