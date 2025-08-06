@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>تطبيق الرسم بنطاقات غير محدودة</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>تطبيق الرسم المتقدم</title>
   <style>
     html, body {
       margin: 0;
@@ -50,36 +50,33 @@
 
 <div id="menu">
   <label>🎨 اللون: <input type="color" id="colorPicker" value="#000000"></label>
-  <label>🖌️ الحجم: <input type="number" id="brushSize" min="0.000000000000000000001" max="100000000000000000000000" value="3" step="1"></label>
+  <label>🖌️ الحجم: <input type="number" id="brushSize" min="1" max="100" value="3" step="1"></label>
   <button id="undoBtn">↩️ تراجع</button>
   <button id="redoBtn">↪️ إعادة</button>
   <button id="clearBtn">🧹 مسح</button>
-  <button id="saveBtn">💾 حفظ</button>
-  <button id="openBtn">📂 فتح</button>
+  <button id="saveBtn">💾 حفظ JSON</button>
+  <button id="openBtn">📂 فتح JSON</button>
 </div>
 
 <canvas id="canvas"></canvas>
 <div class="zoom-info" id="zoomInfo">زوم: 1x</div>
 
 <script>
+  // العناصر الأساسية
   const canvas = document.getElementById("canvas");
   const ctx = canvas.getContext("2d");
   const colorPicker = document.getElementById("colorPicker");
   const brushSize = document.getElementById("brushSize");
-  const undoBtn = document.getElementById("undoBtn");
-  const redoBtn = document.getElementById("redoBtn");
-  const clearBtn = document.getElementById("clearBtn");
-  const saveBtn = document.getElementById("saveBtn");
-  const openBtn = document.getElementById("openBtn");
   const zoomInfo = document.getElementById("zoomInfo");
 
-  // Initialize canvas
-  let width = window.innerWidth;
-  let height = window.innerHeight - 50;
-  canvas.width = width;
-  canvas.height = height;
+  // تهيئة اللوحة
+  function initCanvas() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight - 50;
+    drawAll();
+  }
 
-  // Drawing state
+  // حالة الرسم
   let paths = [];
   let undonePaths = [];
   let currentPath = null;
@@ -87,53 +84,48 @@
   let lastPoint = null;
   const MIN_MOVE_DISTANCE = 2;
 
-  // Zoom state with extreme ranges
+  // حالة الزوم
   let zoom = 1;
   let panX = 0;
   let panY = 0;
   let isZooming = false;
   let lastTouchDist = 0;
   const ZOOM_SPEED = 2.5;
-  const MIN_ZOOM = 1e-24; // 0.000000000000000000000001
-  const MAX_ZOOM = 1e24;  // 100000000000000000000000
 
-  function updateZoomInfo() {
-    zoomInfo.textContent = `زوم: ${zoom.toExponential(2)}x`;
-  }
-
+  // رسم جميع المسارات
   function drawAll() {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.setTransform(zoom, 0, 0, zoom, panX, panY);
 
+    // رسم المسارات المحفوظة
     paths.forEach(path => {
-      ctx.strokeStyle = path.color;
-      ctx.lineWidth = path.size;
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
-      ctx.beginPath();
-      if (path.points.length > 0) {
-        ctx.moveTo(path.points[0].x, path.points[0].y);
-        for (let i = 1; i < path.points.length; i++) {
-          ctx.lineTo(path.points[i].x, path.points[i].y);
-        }
-        ctx.stroke();
-      }
+      drawPath(path);
     });
 
+    // رسم المسار الحالي
     if (currentPath && currentPath.points.length > 1) {
-      ctx.strokeStyle = currentPath.color;
-      ctx.lineWidth = currentPath.size;
-      ctx.lineCap = "round";
-      ctx.beginPath();
-      ctx.moveTo(currentPath.points[0].x, currentPath.points[0].y);
-      for (let i = 1; i < currentPath.points.length; i++) {
-        ctx.lineTo(currentPath.points[i].x, currentPath.points[i].y);
-      }
-      ctx.stroke();
+      drawPath(currentPath);
     }
     
     updateZoomInfo();
+  }
+
+  function drawPath(path) {
+    ctx.strokeStyle = path.color;
+    ctx.lineWidth = path.size;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.beginPath();
+    ctx.moveTo(path.points[0].x, path.points[0].y);
+    for (let i = 1; i < path.points.length; i++) {
+      ctx.lineTo(path.points[i].x, path.points[i].y);
+    }
+    ctx.stroke();
+  }
+
+  function updateZoomInfo() {
+    zoomInfo.textContent = `زوم: ${zoom.toExponential(2)}x`;
   }
 
   function getCanvasPos(e) {
@@ -151,14 +143,14 @@
   function zoomToPoint(pointX, pointY, newZoom) {
     const canvasX = pointX * zoom + panX;
     const canvasY = pointY * zoom + panY;
-    zoom = Math.max(MIN_ZOOM, Math.min(newZoom, MAX_ZOOM));
+    zoom = Math.max(0.1, Math.min(newZoom, 10));
     panX = canvasX - pointX * zoom;
     panY = canvasY - pointY * zoom;
     drawAll();
   }
 
-  // Touch events
-  canvas.addEventListener("touchstart", (e) => {
+  // أحداث اللمس
+  function handleTouchStart(e) {
     e.preventDefault();
     
     if (e.touches.length === 2) {
@@ -175,54 +167,61 @@
       lastPoint = pos;
       isDrawing = false;
     }
-  });
+  }
 
-  canvas.addEventListener("touchmove", (e) => {
+  function handleTouchMove(e) {
     e.preventDefault();
     
     if (isZooming && e.touches.length === 2) {
-      const newDist = distance(
-        {x: e.touches[0].clientX, y: e.touches[0].clientY},
-        {x: e.touches[1].clientX, y: e.touches[1].clientY}
-      );
-      const center = {
-        x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
-        y: (e.touches[0].clientY + e.touches[1].clientY) / 2
-      };
-      const point = {
-        x: (center.x - canvas.getBoundingClientRect().left - panX) / zoom,
-        y: (center.y - canvas.getBoundingClientRect().top - panY) / zoom
-      };
-      zoomToPoint(point.x, point.y, zoom * Math.pow((newDist / lastTouchDist), ZOOM_SPEED));
-      lastTouchDist = newDist;
+      handleZoom(e);
     } 
     else if (e.touches.length === 1 && !isZooming) {
-      const touch = e.touches[0];
-      const pos = getCanvasPos(touch);
-      
-      if (!lastPoint) {
-        lastPoint = pos;
-        return;
-      }
-      
-      if (distance(lastPoint, pos) >= MIN_MOVE_DISTANCE / zoom) {
-        if (!isDrawing) {
-          currentPath = {
-            color: colorPicker.value,
-            size: parseFloat(brushSize.value),
-            points: [lastPoint, pos]
-          };
-          isDrawing = true;
-        } else {
-          currentPath.points.push(pos);
-        }
-        lastPoint = pos;
-        drawAll();
-      }
+      handleDrawing(e.touches[0]);
     }
-  });
+  }
 
-  canvas.addEventListener("touchend", (e) => {
+  function handleZoom(e) {
+    const newDist = distance(
+      {x: e.touches[0].clientX, y: e.touches[0].clientY},
+      {x: e.touches[1].clientX, y: e.touches[1].clientY}
+    );
+    const center = {
+      x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+      y: (e.touches[0].clientY + e.touches[1].clientY) / 2
+    };
+    const point = {
+      x: (center.x - canvas.getBoundingClientRect().left - panX) / zoom,
+      y: (center.y - canvas.getBoundingClientRect().top - panY) / zoom
+    };
+    zoomToPoint(point.x, point.y, zoom * Math.pow((newDist / lastTouchDist), ZOOM_SPEED));
+    lastTouchDist = newDist;
+  }
+
+  function handleDrawing(touch) {
+    const pos = getCanvasPos(touch);
+    
+    if (!lastPoint) {
+      lastPoint = pos;
+      return;
+    }
+    
+    if (distance(lastPoint, pos) >= MIN_MOVE_DISTANCE / zoom) {
+      if (!isDrawing) {
+        currentPath = {
+          color: colorPicker.value,
+          size: parseFloat(brushSize.value),
+          points: [lastPoint, pos]
+        };
+        isDrawing = true;
+      } else {
+        currentPath.points.push(pos);
+      }
+      lastPoint = pos;
+      drawAll();
+    }
+  }
+
+  function handleTouchEnd(e) {
     if (isDrawing && currentPath && currentPath.points.length > 1) {
       paths.push(currentPath);
       undonePaths = [];
@@ -232,16 +231,16 @@
     isDrawing = false;
     isZooming = false;
     lastPoint = null;
-  });
+  }
 
-  // Mouse events
-  canvas.addEventListener("mousedown", (e) => {
+  // أحداث الفأرة
+  function handleMouseDown(e) {
     const pos = getCanvasPos(e);
     lastPoint = pos;
     isDrawing = false;
-  });
+  }
 
-  canvas.addEventListener("mousemove", (e) => {
+  function handleMouseMove(e) {
     if (e.buttons !== 1) return;
     
     const pos = getCanvasPos(e);
@@ -265,9 +264,9 @@
       lastPoint = pos;
       drawAll();
     }
-  });
+  }
 
-  canvas.addEventListener("mouseup", () => {
+  function handleMouseUp() {
     if (isDrawing && currentPath && currentPath.points.length > 1) {
       paths.push(currentPath);
       undonePaths = [];
@@ -276,81 +275,99 @@
     currentPath = null;
     isDrawing = false;
     lastPoint = null;
-  });
+  }
 
-  // Button handlers
-  undoBtn.addEventListener("click", () => {
-    if (paths.length > 0) {
-      undonePaths.push(paths.pop());
-      drawAll();
-    }
-  });
-
-  redoBtn.addEventListener("click", () => {
-    if (undonePaths.length > 0) {
-      paths.push(undonePaths.pop());
-      drawAll();
-    }
-  });
-
-  clearBtn.addEventListener("click", () => {
-    paths = [];
-    undonePaths = [];
-    currentPath = null;
-    zoom = 1;
-    panX = 0;
-    panY = 0;
-    drawAll();
-  });
-
-  saveBtn.addEventListener("click", () => {
+  // حفظ وفتح JSON
+  function saveAsJSON() {
+    const drawingData = {
+      paths: paths,
+      view: { zoom, panX, panY },
+      createdAt: new Date().toISOString()
+    };
+    
+    const dataStr = JSON.stringify(drawingData);
+    const blob = new Blob([dataStr], {type: 'application/json'});
+    const url = URL.createObjectURL(blob);
+    
     const link = document.createElement('a');
-    link.download = 'رسمتي.png';
-    link.href = canvas.toDataURL();
+    link.download = `drawing-${new Date().toISOString().slice(0,10)}.json`;
+    link.href = url;
     link.click();
-  });
+    
+    setTimeout(() => URL.revokeObjectURL(url), 100);
+  }
 
-  openBtn.addEventListener("click", () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*';
-    input.onchange = e => {
-      const file = e.target.files[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = event => {
-          const img = new Image();
-          img.onload = () => {
-            ctx.setTransform(1, 0, 0, 1, 0, 0);
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-            paths.push({
-              color: '#000000',
-              size: 1,
-              points: [
-                {x: 0, y: 0},
-                {x: canvas.width, y: canvas.height}
-              ]
-            });
-            drawAll();
-          };
-          img.src = event.target.result;
-        };
-        reader.readAsDataURL(file);
+  function openJSON(file) {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      try {
+        const data = JSON.parse(e.target.result);
+        paths = data.paths || [];
+        zoom = data.view?.zoom || 1;
+        panX = data.view?.panX || 0;
+        panY = data.view?.panY || 0;
+        undonePaths = [];
+        drawAll();
+      } catch (error) {
+        alert('خطأ في تحميل الملف: ' + error.message);
       }
     };
-    input.click();
-  });
+    reader.readAsText(file);
+  }
 
-  window.addEventListener("resize", () => {
-    width = window.innerWidth;
-    height = window.innerHeight - 50;
-    canvas.width = width;
-    canvas.height = height;
-    drawAll();
-  });
+  // إعداد الأحداث
+  function setupEventListeners() {
+    // اللمس
+    canvas.addEventListener("touchstart", handleTouchStart);
+    canvas.addEventListener("touchmove", handleTouchMove, {passive: false});
+    canvas.addEventListener("touchend", handleTouchEnd);
+    
+    // الفأرة
+    canvas.addEventListener("mousedown", handleMouseDown);
+    canvas.addEventListener("mousemove", handleMouseMove);
+    canvas.addEventListener("mouseup", handleMouseUp);
+    canvas.addEventListener("mouseleave", handleMouseUp);
+    
+    // الأزرار
+    document.getElementById("undoBtn").addEventListener("click", () => {
+      if (paths.length > 0) {
+        undonePaths.push(paths.pop());
+        drawAll();
+      }
+    });
+    
+    document.getElementById("redoBtn").addEventListener("click", () => {
+      if (undonePaths.length > 0) {
+        paths.push(undonePaths.pop());
+        drawAll();
+      }
+    });
+    
+    document.getElementById("clearBtn").addEventListener("click", () => {
+      paths = [];
+      undonePaths = [];
+      zoom = 1;
+      panX = 0;
+      panY = 0;
+      drawAll();
+    });
+    
+    document.getElementById("saveBtn").addEventListener("click", saveAsJSON);
+    
+    document.getElementById("openBtn").addEventListener("click", () => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.json';
+      input.onchange = e => openJSON(e.target.files[0]);
+      input.click();
+    });
+    
+    window.addEventListener("resize", initCanvas);
+  }
 
-  drawAll();
+  // بدء التطبيق
+  setupEventListeners();
+  initCanvas();
 </script>
 </body>
 </html>
