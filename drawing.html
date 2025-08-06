@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>تطبيق رسم بانتظار 200ms</title>
+  <title>تطبيق رسم متقدم</title>
   <style>
     html, body {
       margin: 0;
@@ -55,6 +55,7 @@
   <button id="redoBtn">↪️ إعادة</button>
   <button id="clearBtn">🧹 مسح</button>
   <button id="saveBtn">💾 حفظ</button>
+  <button id="openBtn">📂 فتح</button>
 </div>
 
 <canvas id="canvas"></canvas>
@@ -69,6 +70,7 @@
   const redoBtn = document.getElementById("redoBtn");
   const clearBtn = document.getElementById("clearBtn");
   const saveBtn = document.getElementById("saveBtn");
+  const openBtn = document.getElementById("openBtn");
   const zoomInfo = document.getElementById("zoomInfo");
 
   // Initialize canvas
@@ -90,7 +92,7 @@
   let isZooming = false;
   let lastTouchDist = 0;
   let inputDelay = null;
-  const INPUT_DELAY = 200; // 200 مللي ثانية تأخير
+  const INPUT_DELAY = 50; // 50 مللي ثانية
 
   function updateZoomInfo() {
     zoomInfo.textContent = `زوم: ${zoom.toExponential(2)}x`;
@@ -137,12 +139,11 @@
     drawAll();
   }
 
-  // Touch events with 200ms delay
+  // Touch events with 50ms delay
   canvas.addEventListener("touchstart", (e) => {
     e.preventDefault();
     
     if (e.touches.length === 2) {
-      // بدء تأخير 200ms لتحديد إذا كانت لمسة زوم
       inputDelay = setTimeout(() => {
         if (e.touches.length === 2) {
           isZooming = true;
@@ -151,7 +152,6 @@
       }, INPUT_DELAY);
     } 
     else if (e.touches.length === 1 && !inputDelay) {
-      // بدء الرسم فورًا إذا لم يكن هناك تأخير
       startDrawing(e.touches[0]);
     }
   });
@@ -170,7 +170,6 @@
     e.preventDefault();
     
     if (isZooming && e.touches.length === 2) {
-      // معالجة الزوم
       const newDist = distance(e.touches[0], e.touches[1]);
       const center = {
         x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
@@ -184,7 +183,6 @@
       lastTouchDist = newDist;
     } 
     else if (isDrawing && e.touches.length === 1 && !isZooming) {
-      // الاستمرار في الرسم
       const touch = e.touches[0];
       const pos = getCanvasPos(touch);
       currentPath.points.push(pos);
@@ -199,7 +197,6 @@
       ctx.stroke();
     }
     else if (inputDelay && e.touches.length === 1) {
-      // إذا أصبحت لمسة واحدة أثناء فترة الانتظار، ألغِ الزوم وابدأ الرسم
       clearTimeout(inputDelay);
       inputDelay = null;
       startDrawing(e.touches[0]);
@@ -221,7 +218,7 @@
     isZooming = false;
   });
 
-  // بقية الأحداث والأزرار...
+  // Button handlers
   undoBtn.addEventListener("click", () => {
     if (paths.length > 0) {
       undonePaths.push(paths.pop());
@@ -250,6 +247,43 @@
     link.download = 'رسمتي.png';
     link.href = canvas.toDataURL();
     link.click();
+  });
+
+  openBtn.addEventListener("click", () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = e => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = event => {
+          const img = new Image();
+          img.onload = () => {
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            
+            // Convert image to drawing paths
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = canvas.width;
+            tempCanvas.height = canvas.height;
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCtx.drawImage(img, 0, 0);
+            
+            // Add to paths
+            paths.push({
+              color: '#000000',
+              size: 1,
+              points: [{x: 0, y: 0}, {x: canvas.width, y: canvas.height}]
+            });
+          };
+          img.src = event.target.result;
+        };
+        reader.readAsDataURL(file);
+      }
+    };
+    input.click();
   });
 
   window.addEventListener("resize", () => {
