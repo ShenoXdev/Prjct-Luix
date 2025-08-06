@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>تطبيق رسم متقدم</title>
+  <title>تطبيق رسم بدون نقاط غير مرغوب فيها</title>
   <style>
     html, body {
       margin: 0;
@@ -82,8 +82,9 @@
   // Drawing state
   let paths = [];
   let undonePaths = [];
-  let currentPath = [];
+  let currentPath = null;
   let isDrawing = false;
+  let lastRenderTime = 0;
 
   // Zoom state
   let zoom = 1;
@@ -92,13 +93,17 @@
   let isZooming = false;
   let lastTouchDist = 0;
   let inputDelay = null;
-  const INPUT_DELAY = 50; // 50 مللي ثانية
+  const INPUT_DELAY = 50;
 
   function updateZoomInfo() {
     zoomInfo.textContent = `زوم: ${zoom.toExponential(2)}x`;
   }
 
   function drawAll() {
+    const now = Date.now();
+    if (now - lastRenderTime < 16) return; // Limit to ~60fps
+    lastRenderTime = now;
+    
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.setTransform(zoom, 0, 0, zoom, panX, panY);
@@ -115,6 +120,19 @@
       }
       ctx.stroke();
     });
+    
+    if (currentPath && currentPath.points.length > 1) {
+      ctx.strokeStyle = currentPath.color;
+      ctx.lineWidth = currentPath.size;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(currentPath.points[0].x, currentPath.points[0].y);
+      for (let i = 1; i < currentPath.points.length; i++) {
+        ctx.lineTo(currentPath.points[i].x, currentPath.points[i].y);
+      }
+      ctx.stroke();
+    }
+    
     updateZoomInfo();
   }
 
@@ -139,11 +157,17 @@
     drawAll();
   }
 
-  // Touch events with 50ms delay
+  // Touch events
   canvas.addEventListener("touchstart", (e) => {
     e.preventDefault();
     
     if (e.touches.length === 2) {
+      // Reset drawing state when zooming starts
+      if (currentPath && currentPath.points.length === 1) {
+        currentPath.points = [];
+      }
+      isDrawing = false;
+      
       inputDelay = setTimeout(() => {
         if (e.touches.length === 2) {
           isZooming = true;
@@ -152,19 +176,15 @@
       }, INPUT_DELAY);
     } 
     else if (e.touches.length === 1 && !inputDelay) {
-      startDrawing(e.touches[0]);
+      const pos = getCanvasPos(e.touches[0]);
+      isDrawing = true;
+      currentPath = {
+        color: colorPicker.value,
+        size: parseFloat(brushSize.value),
+        points: [pos]
+      };
     }
   });
-
-  function startDrawing(touch) {
-    const pos = getCanvasPos(touch);
-    isDrawing = true;
-    currentPath = {
-      color: colorPicker.value,
-      size: parseFloat(brushSize.value),
-      points: [pos]
-    };
-  }
 
   canvas.addEventListener("touchmove", (e) => {
     e.preventDefault();
@@ -185,21 +205,27 @@
     else if (isDrawing && e.touches.length === 1 && !isZooming) {
       const touch = e.touches[0];
       const pos = getCanvasPos(touch);
-      currentPath.points.push(pos);
-      
-      ctx.strokeStyle = currentPath.color;
-      ctx.lineWidth = currentPath.size;
-      ctx.lineCap = "round";
-      ctx.beginPath();
-      ctx.moveTo(currentPath.points[currentPath.points.length-2].x, 
-                currentPath.points[currentPath.points.length-2].y);
-      ctx.lineTo(pos.x, pos.y);
-      ctx.stroke();
+      if (!currentPath) {
+        currentPath = {
+          color: colorPicker.value,
+          size: parseFloat(brushSize.value),
+          points: [pos]
+        };
+      } else {
+        currentPath.points.push(pos);
+      }
+      drawAll();
     }
     else if (inputDelay && e.touches.length === 1) {
       clearTimeout(inputDelay);
       inputDelay = null;
-      startDrawing(e.touches[0]);
+      const pos = getCanvasPos(e.touches[0]);
+      isDrawing = true;
+      currentPath = {
+        color: colorPicker.value,
+        size: parseFloat(brushSize.value),
+        points: [pos]
+      };
     }
   });
 
@@ -209,9 +235,13 @@
       inputDelay = null;
     }
     
-    if (isDrawing && currentPath.points.length > 0) {
+    if (isDrawing && currentPath && currentPath.points.length > 1) {
       paths.push(currentPath);
       undonePaths = [];
+      currentPath = null;
+    } else if (currentPath && currentPath.points.length <= 1) {
+      // Remove single-point paths that might have been created during zoom
+      currentPath = null;
     }
     
     isDrawing = false;
@@ -236,6 +266,7 @@
   clearBtn.addEventListener("click", () => {
     paths = [];
     undonePaths = [];
+    currentPath = null;
     zoom = 1;
     panX = 0;
     panY = 0;
@@ -263,20 +294,7 @@
             ctx.setTransform(1, 0, 0, 1, 0, 0);
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-            
-            // Convert image to drawing paths
-            const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = canvas.width;
-            tempCanvas.height = canvas.height;
-            const tempCtx = tempCanvas.getContext('2d');
-            tempCtx.drawImage(img, 0, 0);
-            
-            // Add to paths
-            paths.push({
-              color: '#000000',
-              size: 1,
-              points: [{x: 0, y: 0}, {x: canvas.width, y: canvas.height}]
-            });
+            drawAll();
           };
           img.src = event.target.result;
         };
