@@ -80,18 +80,20 @@
   const jsonFileInput = document.getElementById("jsonFileInput");
   const zoomInfo = document.getElementById("zoomInfo");
 
-  // Initialize canvas with extremely large dimensions
-  const CANVAS_WIDTH = 1e23; // 100,000,000,000,000,000,000,000
-  const CANVAS_HEIGHT = 1e23;
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight - 50;
+  // Initialize canvas
+  let width = window.innerWidth;
+  let height = window.innerHeight - 50;
+  canvas.width = width;
+  canvas.height = height;
 
   // Drawing state
   let paths = [];
   let undonePaths = [];
   let currentPath = null;
   let drawing = false;
-  let hasMoved = false;
+  let hasMoved = false; // لتتبع إذا كان المستخدم حرك إصبعه/الفأرة
+  let lastX = 0;
+  let lastY = 0;
 
   // Zoom state
   let zoom = 1;
@@ -101,15 +103,9 @@
   let lastTouchDist = 0;
   let zoomEndTime = 0;
   const ZOOM_COOLDOWN = 200;
-  const MIN_ZOOM = 1e-24; // 0.000000000000000000000001
-  const MAX_ZOOM = 1e23;   // 100000000000000000000000
 
   function updateZoomInfo() {
-    if (zoom < 0.01 || zoom > 100) {
-      zoomInfo.textContent = `زوم: ${zoom.toExponential(2)}x`;
-    } else {
-      zoomInfo.textContent = `زوم: ${zoom.toFixed(2)}x`;
-    }
+    zoomInfo.textContent = `زوم: ${zoom.toFixed(2)}x`;
   }
 
   function drawAll() {
@@ -147,7 +143,7 @@
   function zoomToPoint(pointX, pointY, newZoom) {
     const canvasX = pointX * zoom + panX;
     const canvasY = pointY * zoom + panY;
-    zoom = Math.max(MIN_ZOOM, Math.min(newZoom, MAX_ZOOM));
+    zoom = Math.max(0.1, Math.min(newZoom, 10));
     panX = canvasX - pointX * zoom;
     panY = canvasY - pointY * zoom;
     drawAll();
@@ -163,10 +159,12 @@
     } 
     else if (e.touches.length === 1 && !isZooming && Date.now() - zoomEndTime > ZOOM_COOLDOWN) {
       const pos = getCanvasPos(e.touches[0]);
+      lastX = pos.x;
+      lastY = pos.y;
       currentPath = {
         color: colorPicker.value,
         size: parseFloat(brushSize.value),
-        points: [pos]
+        points: []
       };
       drawing = true;
       hasMoved = false;
@@ -192,17 +190,31 @@
     else if (drawing && e.touches.length === 1 && !isZooming) {
       const touch = e.touches[0];
       const pos = getCanvasPos(touch);
-      currentPath.points.push(pos);
-      hasMoved = true;
       
-      ctx.strokeStyle = currentPath.color;
-      ctx.lineWidth = currentPath.size;
-      ctx.lineCap = "round";
-      ctx.beginPath();
-      ctx.moveTo(currentPath.points[currentPath.points.length-2].x, 
-                currentPath.points[currentPath.points.length-2].y);
-      ctx.lineTo(pos.x, pos.y);
-      ctx.stroke();
+      // لا ترسم إذا لم يتحرك الإصبع بشكل كافي
+      const dx = pos.x - lastX;
+      const dy = pos.y - lastY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      
+      if (dist > 0.5) { // حد أدنى للحركة
+        if (!hasMoved) {
+          // بداية المسار بعد الحركة الأولى فقط
+          currentPath.points.push({x: lastX, y: lastY});
+          hasMoved = true;
+        }
+        currentPath.points.push(pos);
+        
+        ctx.strokeStyle = currentPath.color;
+        ctx.lineWidth = currentPath.size;
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(lastX, lastY);
+        ctx.lineTo(pos.x, pos.y);
+        ctx.stroke();
+        
+        lastX = pos.x;
+        lastY = pos.y;
+      }
     }
   });
 
@@ -212,22 +224,25 @@
       zoomEndTime = Date.now();
     }
     
-    if (drawing && currentPath.points.length > 1 && hasMoved) {
+    if (drawing && hasMoved && currentPath.points.length > 1) {
       paths.push(currentPath);
       undonePaths = [];
     }
     drawing = false;
     currentPath = null;
+    hasMoved = false;
   });
 
   // Mouse events (for desktop)
   canvas.addEventListener("mousedown", (e) => {
     if (Date.now() - zoomEndTime > ZOOM_COOLDOWN) {
       const pos = getCanvasPos(e);
+      lastX = pos.x;
+      lastY = pos.y;
       currentPath = {
         color: colorPicker.value,
         size: parseFloat(brushSize.value),
-        points: [pos]
+        points: []
       };
       drawing = true;
       hasMoved = false;
@@ -235,38 +250,54 @@
   });
 
   canvas.addEventListener("mousemove", (e) => {
-    if (drawing && currentPath) {
+    if (drawing) {
       const pos = getCanvasPos(e);
-      currentPath.points.push(pos);
-      hasMoved = true;
       
-      ctx.strokeStyle = currentPath.color;
-      ctx.lineWidth = currentPath.size;
-      ctx.lineCap = "round";
-      ctx.beginPath();
-      ctx.moveTo(currentPath.points[currentPath.points.length-2].x, 
-                currentPath.points[currentPath.points.length-2].y);
-      ctx.lineTo(pos.x, pos.y);
-      ctx.stroke();
+      // لا ترسم إذا لم تتحرك الفأرة بشكل كافي
+      const dx = pos.x - lastX;
+      const dy = pos.y - lastY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      
+      if (dist > 0.5) { // حد أدنى للحركة
+        if (!hasMoved) {
+          // بداية المسار بعد الحركة الأولى فقط
+          currentPath.points.push({x: lastX, y: lastY});
+          hasMoved = true;
+        }
+        currentPath.points.push(pos);
+        
+        ctx.strokeStyle = currentPath.color;
+        ctx.lineWidth = currentPath.size;
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(lastX, lastY);
+        ctx.lineTo(pos.x, pos.y);
+        ctx.stroke();
+        
+        lastX = pos.x;
+        lastY = pos.y;
+      }
     }
   });
 
   canvas.addEventListener("mouseup", () => {
-    if (drawing && currentPath && currentPath.points.length > 1 && hasMoved) {
+    if (drawing && hasMoved && currentPath.points.length > 1) {
       paths.push(currentPath);
       undonePaths = [];
     }
     drawing = false;
     currentPath = null;
+    hasMoved = false;
   });
 
   canvas.addEventListener("mouseleave", () => {
-    if (drawing && currentPath && currentPath.points.length > 1 && hasMoved) {
+    if (drawing && hasMoved && currentPath.points.length > 1) {
       paths.push(currentPath);
       undonePaths = [];
     }
     drawing = false;
     currentPath = null;
+    hasMoved = false;
   });
 
   // Button handlers
@@ -280,32 +311,9 @@
   });
 
   saveBtn.addEventListener("click", () => {
-    // Create a temporary canvas for saving
-    const tempCanvas = document.createElement('canvas');
-    tempCanvas.width = 2000;
-    tempCanvas.height = 2000;
-    const tempCtx = tempCanvas.getContext('2d');
-    
-    // Draw all paths scaled to fit the temp canvas
-    const scale = Math.min(tempCanvas.width / CANVAS_WIDTH, tempCanvas.height / CANVAS_HEIGHT);
-    tempCtx.scale(scale, scale);
-    
-    for (let path of paths) {
-      tempCtx.strokeStyle = path.color;
-      tempCtx.lineWidth = path.size;
-      tempCtx.lineCap = "round";
-      tempCtx.lineJoin = "round";
-      tempCtx.beginPath();
-      for (let i = 0; i < path.points.length - 1; i++) {
-        tempCtx.moveTo(path.points[i].x, path.points[i].y);
-        tempCtx.lineTo(path.points[i + 1].x, path.points[i + 1].y);
-      }
-      tempCtx.stroke();
-    }
-    
     const link = document.createElement('a');
     link.download = 'drawing.png';
-    link.href = tempCanvas.toDataURL();
+    link.href = canvas.toDataURL();
     link.click();
   });
 
@@ -314,9 +322,7 @@
       paths: paths,
       zoom: zoom,
       panX: panX,
-      panY: panY,
-      canvasWidth: CANVAS_WIDTH,
-      canvasHeight: CANVAS_HEIGHT
+      panY: panY
     };
     const json = JSON.stringify(data);
     const blob = new Blob([json], {type: "application/json"});
@@ -371,8 +377,10 @@
   });
 
   window.addEventListener("resize", () => {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight - 50;
+    width = window.innerWidth;
+    height = window.innerHeight - 50;
+    canvas.width = width;
+    canvas.height = height;
     drawAll();
   });
 
