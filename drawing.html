@@ -1,28 +1,71 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>رسم على صفحة الويب</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>تطبيق رسم</title>
   <style>
-    html, body {
+    body, html {
       margin: 0;
       padding: 0;
       overflow: hidden;
       touch-action: none;
+      font-family: Arial, sans-serif;
     }
+
+    #menu {
+      position: fixed;
+      top: 0;
+      right: 0;
+      left: 0;
+      background: #f0f0f0;
+      padding: 10px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      z-index: 10;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    }
+
+    #menu input[type="color"],
+    #menu input[type="range"],
+    #menu button {
+      padding: 5px;
+      font-size: 14px;
+    }
+
     canvas {
       display: block;
+      position: absolute;
+      top: 50px; /* تحت المنيو */
+      left: 0;
+      right: 0;
+      bottom: 0;
       background: white;
+      touch-action: none;
     }
   </style>
 </head>
 <body>
+
+  <div id="menu">
+    🎨 اللون:
+    <input type="color" id="colorPicker" value="#000000" />
+    🖌️ الحجم:
+    <input type="range" id="brushSize" min="1" max="50" value="3" />
+    <button id="clearBtn">🧹 مسح</button>
+    <button id="saveBtn">💾 حفظ</button>
+  </div>
+
   <canvas id="canvas"></canvas>
 
   <script>
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
+    const colorPicker = document.getElementById('colorPicker');
+    const brushSize = document.getElementById('brushSize');
+    const clearBtn = document.getElementById('clearBtn');
+    const saveBtn = document.getElementById('saveBtn');
 
     let painting = false;
     let lastX = 0;
@@ -30,7 +73,7 @@
 
     function resizeCanvas() {
       canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
+      canvas.height = window.innerHeight - 50; // عشان المنيو
     }
 
     window.addEventListener('resize', resizeCanvas);
@@ -46,8 +89,8 @@
       ctx.beginPath();
       ctx.moveTo(lastX, lastY);
       ctx.lineTo(x, y);
-      ctx.strokeStyle = 'black';
-      ctx.lineWidth = 3;
+      ctx.strokeStyle = colorPicker.value;
+      ctx.lineWidth = brushSize.value;
       ctx.lineCap = 'round';
       ctx.stroke();
       [lastX, lastY] = [x, y];
@@ -73,7 +116,7 @@
     });
 
     canvas.addEventListener('touchmove', (e) => {
-      e.preventDefault(); // منع التمرير أثناء الرسم
+      e.preventDefault();
       if (e.touches.length === 1) {
         const touch = e.touches[0];
         const rect = canvas.getBoundingClientRect();
@@ -82,6 +125,19 @@
     });
 
     canvas.addEventListener('touchend', stopDrawing);
+
+    // Clear canvas
+    clearBtn.addEventListener('click', () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    });
+
+    // Save image
+    saveBtn.addEventListener('click', () => {
+      const link = document.createElement('a');
+      link.download = 'my_drawing.png';
+      link.href = canvas.toDataURL();
+      link.click();
+    });
   </script>
 </body>
 </html>
