@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>رسم مع زوم و بان حقيقي</title>
+  <title>رسم مع زوم وبان وUndo/Redo</title>
   <style>
     body, html {
       margin: 0;
@@ -35,7 +35,7 @@
       border-radius: 8px;
       border: 1px solid #ccc;
       flex: 1 1 auto;
-      min-width: 100px;
+      min-width: 80px;
     }
 
     canvas {
@@ -55,6 +55,9 @@
   <div id="menu">
     🎨 <input type="color" id="colorPicker" value="#000000" />
     🖌️ <input type="range" id="brushSize" min="1" max="50" value="5" />
+    ✍️ <button id="toggleToolBtn">ممحاة</button>
+    ↩️ <button id="undoBtn">Undo</button>
+    ↪️ <button id="redoBtn">Redo</button>
     🧹 <button id="clearBtn">مسح</button>
     💾 <button id="saveBtn">حفظ</button>
   </div>
@@ -68,8 +71,10 @@
     const brushSize = document.getElementById("brushSize");
     const clearBtn = document.getElementById("clearBtn");
     const saveBtn = document.getElementById("saveBtn");
+    const undoBtn = document.getElementById("undoBtn");
+    const redoBtn = document.getElementById("redoBtn");
+    const toggleToolBtn = document.getElementById("toggleToolBtn");
 
-    // إعدادات التحريك والزوم
     let scale = 1;
     let offsetX = 0;
     let offsetY = 0;
@@ -79,10 +84,11 @@
     let lastTouchDistance = 0;
     let lastScale = 1;
 
-    // تخزين الخطوط
     let strokes = [];
+    let redoStack = [];
     let currentStroke = null;
     let painting = false;
+    let tool = "brush"; // أو "eraser"
 
     function resizeCanvas() {
       canvas.width = window.innerWidth;
@@ -96,20 +102,16 @@
     function redraw() {
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      
-      // تطبيق التحويلات (الزوم والبان)
       ctx.setTransform(scale, 0, 0, scale, offsetX, offsetY);
-      
-      // رسم جميع الخطوط
+
       for (const stroke of strokes) {
         if (stroke.points.length === 0) continue;
-        
         ctx.beginPath();
         ctx.strokeStyle = stroke.color;
-        ctx.lineWidth = stroke.size / scale; // تعديل حجم الفرشاة حسب الزوم
+        ctx.lineWidth = stroke.size / scale;
         ctx.lineCap = "round";
         ctx.lineJoin = "round";
-        
+
         ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
         for (let i = 1; i < stroke.points.length; i++) {
           ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
@@ -132,34 +134,32 @@
       return Math.sqrt(dx * dx + dy * dy);
     }
 
-    // أحداث اللمس
     canvas.addEventListener("touchstart", (e) => {
       e.preventDefault();
-      
+
       if (e.touches.length === 1) {
-        // بدء الرسم
+        // لا ترسم إذا فيه أكثر من إصبع
+        if (e.touches.length !== 1) return;
+
         const pos = getCanvasPos(e.touches[0].clientX, e.touches[0].clientY);
         currentStroke = {
-          color: colorPicker.value,
+          color: tool === "eraser" ? "#ffffff" : colorPicker.value,
           size: parseInt(brushSize.value),
           points: [pos]
         };
         strokes.push(currentStroke);
+        redoStack = []; // مسح Redo stack عند أي تغيير
         painting = true;
-        
-        // تحضير للتحريك إذا لم يكن رسم
-        isPanning = false;
+
         lastX = e.touches[0].clientX;
         lastY = e.touches[0].clientY;
       } 
       else if (e.touches.length === 2) {
-        // بدء الزوم
         lastTouchDistance = getTouchDistance(e.touches);
         lastScale = scale;
         painting = false;
-      }
+      } 
       else if (e.touches.length >= 3) {
-        // بدء التحريك
         isPanning = true;
         lastX = e.touches[0].clientX;
         lastY = e.touches[0].clientY;
@@ -169,44 +169,38 @@
 
     canvas.addEventListener("touchmove", (e) => {
       e.preventDefault();
-      
+
       if (e.touches.length === 1 && painting) {
-        // الاستمرار في الرسم
         const pos = getCanvasPos(e.touches[0].clientX, e.touches[0].clientY);
         currentStroke.points.push(pos);
         redraw();
       } 
       else if (e.touches.length === 2) {
-        // تطبيق الزوم
         const touchDistance = getTouchDistance(e.touches);
         const newScale = lastScale * (touchDistance / lastTouchDistance);
-        
-        // تحديد نقطة المنتصف للزوم حولها
+
         const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
         const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-        
-        // حساب الإزاحة الجديدة للحفاظ على نقطة الزوم ثابتة
         const rect = canvas.getBoundingClientRect();
         const worldX = (midX - rect.left - offsetX) / scale;
         const worldY = (midY - rect.top - offsetY) / scale;
-        
-        scale = Math.max(0.1, Math.min(newScale, 10)); // تحديد حدود الزوم
+
+        scale = Math.max(0.1, Math.min(newScale, 10));
         offsetX = midX - rect.left - worldX * scale;
         offsetY = midY - rect.top - worldY * scale;
-        
+
         redraw();
-      }
+      } 
       else if (e.touches.length >= 3 && isPanning) {
-        // تطبيق التحريك
         const dx = e.touches[0].clientX - lastX;
         const dy = e.touches[0].clientY - lastY;
-        
+
         offsetX += dx;
         offsetY += dy;
-        
+
         lastX = e.touches[0].clientX;
         lastY = e.touches[0].clientY;
-        
+
         redraw();
       }
     });
@@ -216,46 +210,60 @@
       isPanning = false;
     });
 
-    // أحداث الأزرار
+    // أزرار التحكم
     clearBtn.addEventListener("click", () => {
       strokes = [];
+      redoStack = [];
       redraw();
     });
 
     saveBtn.addEventListener("click", () => {
-      // حفظ الصورة مع خلفية بيضاء
       const tempCanvas = document.createElement('canvas');
       tempCanvas.width = canvas.width;
       tempCanvas.height = canvas.height;
       const tempCtx = tempCanvas.getContext('2d');
-      
-      // تعيين خلفية بيضاء
+
       tempCtx.fillStyle = '#ffffff';
       tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
-      
-      // رسم المحتوى مع التحويلات
       tempCtx.setTransform(scale, 0, 0, scale, offsetX, offsetY);
+
       for (const stroke of strokes) {
         if (stroke.points.length === 0) continue;
-        
         tempCtx.beginPath();
         tempCtx.strokeStyle = stroke.color;
         tempCtx.lineWidth = stroke.size;
         tempCtx.lineCap = "round";
         tempCtx.lineJoin = "round";
-        
         tempCtx.moveTo(stroke.points[0].x, stroke.points[0].y);
         for (let i = 1; i < stroke.points.length; i++) {
           tempCtx.lineTo(stroke.points[i].x, stroke.points[i].y);
         }
         tempCtx.stroke();
       }
-      
-      // تحميل الصورة
+
       const link = document.createElement("a");
       link.download = "رسمتي.png";
       link.href = tempCanvas.toDataURL();
       link.click();
+    });
+
+    undoBtn.addEventListener("click", () => {
+      if (strokes.length > 0) {
+        redoStack.push(strokes.pop());
+        redraw();
+      }
+    });
+
+    redoBtn.addEventListener("click", () => {
+      if (redoStack.length > 0) {
+        strokes.push(redoStack.pop());
+        redraw();
+      }
+    });
+
+    toggleToolBtn.addEventListener("click", () => {
+      tool = (tool === "brush") ? "eraser" : "brush";
+      toggleToolBtn.textContent = (tool === "brush") ? "ممحاة" : "✍️ فرشاة";
     });
   </script>
 </body>
