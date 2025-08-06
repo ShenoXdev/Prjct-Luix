@@ -44,6 +44,9 @@
       border-radius: 5px;
       font-size: 12px;
     }
+    input[type="file"] {
+      display: none;
+    }
   </style>
 </head>
 <body>
@@ -54,7 +57,10 @@
   <button id="undoBtn">↩️ تراجع</button>
   <button id="redoBtn">↪️ إعادة</button>
   <button id="clearBtn">🧹 مسح</button>
-  <button id="saveBtn">💾 حفظ</button>
+  <button id="saveBtn">💾 حفظ صورة</button>
+  <button id="saveJsonBtn">📁 حفظ JSON</button>
+  <button id="loadJsonBtn">📂 فتح JSON</button>
+  <input type="file" id="jsonFileInput" accept=".json">
 </div>
 
 <canvas id="canvas"></canvas>
@@ -69,6 +75,9 @@
   const redoBtn = document.getElementById("redoBtn");
   const clearBtn = document.getElementById("clearBtn");
   const saveBtn = document.getElementById("saveBtn");
+  const saveJsonBtn = document.getElementById("saveJsonBtn");
+  const loadJsonBtn = document.getElementById("loadJsonBtn");
+  const jsonFileInput = document.getElementById("jsonFileInput");
   const zoomInfo = document.getElementById("zoomInfo");
 
   // Initialize canvas
@@ -80,8 +89,9 @@
   // Drawing state
   let paths = [];
   let undonePaths = [];
-  let currentPath = [];
+  let currentPath = null;
   let drawing = false;
+  let hasMoved = false; // لتتبع إذا كان المستخدم حرك إصبعه/الفأرة
 
   // Zoom state
   let zoom = 1;
@@ -91,9 +101,10 @@
   let lastTouchDist = 0;
   let zoomEndTime = 0;
   const ZOOM_COOLDOWN = 200; // 200ms تأخير بعد الزوم
+  const MAX_ZOOM = 20; // أقصى قيمة للزوم
 
   function updateZoomInfo() {
-    zoomInfo.textContent = `زوم: ${zoom.toExponential(2)}x`;
+    zoomInfo.textContent = `زوم: ${zoom.toFixed(2)}x`;
   }
 
   function drawAll() {
@@ -131,7 +142,7 @@
   function zoomToPoint(pointX, pointY, newZoom) {
     const canvasX = pointX * zoom + panX;
     const canvasY = pointY * zoom + panY;
-    zoom = Math.max(0.1, Math.min(newZoom, 10));
+    zoom = Math.max(0.1, Math.min(newZoom, MAX_ZOOM));
     panX = canvasX - pointX * zoom;
     panY = canvasY - pointY * zoom;
     drawAll();
@@ -153,6 +164,7 @@
         points: [pos]
       };
       drawing = true;
+      hasMoved = false;
     }
   });
 
@@ -176,6 +188,7 @@
       const touch = e.touches[0];
       const pos = getCanvasPos(touch);
       currentPath.points.push(pos);
+      hasMoved = true;
       
       ctx.strokeStyle = currentPath.color;
       ctx.lineWidth = currentPath.size;
@@ -191,14 +204,15 @@
   canvas.addEventListener("touchend", (e) => {
     if (isZooming) {
       isZooming = false;
-      zoomEndTime = Date.now(); // تسجيل وقت انتهاء الزوم
+      zoomEndTime = Date.now();
     }
     
-    if (drawing && currentPath.points.length > 0) {
+    if (drawing && currentPath.points.length > 1 && hasMoved) {
       paths.push(currentPath);
       undonePaths = [];
     }
     drawing = false;
+    currentPath = null;
   });
 
   // Mouse events (for desktop)
@@ -211,13 +225,15 @@
         points: [pos]
       };
       drawing = true;
+      hasMoved = false;
     }
   });
 
   canvas.addEventListener("mousemove", (e) => {
-    if (drawing) {
+    if (drawing && currentPath) {
       const pos = getCanvasPos(e);
       currentPath.points.push(pos);
+      hasMoved = true;
       
       ctx.strokeStyle = currentPath.color;
       ctx.lineWidth = currentPath.size;
@@ -231,11 +247,21 @@
   });
 
   canvas.addEventListener("mouseup", () => {
-    if (drawing && currentPath.points.length > 0) {
+    if (drawing && currentPath && currentPath.points.length > 1 && hasMoved) {
       paths.push(currentPath);
       undonePaths = [];
     }
     drawing = false;
+    currentPath = null;
+  });
+
+  canvas.addEventListener("mouseleave", () => {
+    if (drawing && currentPath && currentPath.points.length > 1 && hasMoved) {
+      paths.push(currentPath);
+      undonePaths = [];
+    }
+    drawing = false;
+    currentPath = null;
   });
 
   // Button handlers
@@ -253,6 +279,51 @@
     link.download = 'drawing.png';
     link.href = canvas.toDataURL();
     link.click();
+  });
+
+  saveJsonBtn.addEventListener("click", () => {
+    const data = {
+      paths: paths,
+      zoom: zoom,
+      panX: panX,
+      panY: panY
+    };
+    const json = JSON.stringify(data);
+    const blob = new Blob([json], {type: "application/json"});
+    const url = URL.createObjectURL(blob);
+    
+    const link = document.createElement('a');
+    link.download = 'drawing.json';
+    link.href = url;
+    link.click();
+    
+    setTimeout(() => URL.revokeObjectURL(url), 100);
+  });
+
+  loadJsonBtn.addEventListener("click", () => {
+    jsonFileInput.click();
+  });
+
+  jsonFileInput.addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const data = JSON.parse(event.target.result);
+        paths = data.paths || [];
+        zoom = data.zoom || 1;
+        panX = data.panX || 0;
+        panY = data.panY || 0;
+        undonePaths = [];
+        drawAll();
+      } catch (err) {
+        alert("خطأ في تحميل الملف: " + err.message);
+      }
+    };
+    reader.readAsText(file);
+    jsonFileInput.value = ''; // للسماح بتحميل نفس الملف مرة أخرى
   });
 
   undoBtn.addEventListener("click", () => {
