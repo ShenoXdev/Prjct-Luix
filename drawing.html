@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>رسم مع زوم و بان</title>
+  <title>رسم مع زوم و بان حقيقي</title>
   <style>
     body, html {
       margin: 0;
@@ -69,10 +69,6 @@
     const clearBtn = document.getElementById("clearBtn");
     const saveBtn = document.getElementById("saveBtn");
 
-    let painting = false;
-    let lastX = 0;
-    let lastY = 0;
-
     let scale = 1;
     let offsetX = 0;
     let offsetY = 0;
@@ -80,6 +76,11 @@
     let lastTouchDistance = 0;
     let lastPanX = 0;
     let lastPanY = 0;
+
+    let strokes = []; // كل الخطوط اللي ترسمت
+    let currentStroke = null;
+
+    let painting = false;
 
     function resizeCanvas() {
       canvas.width = window.innerWidth;
@@ -91,7 +92,24 @@
     resizeCanvas();
 
     function redraw() {
+      ctx.setTransform(1, 0, 0, 1, 0, 0); // reset transform
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.setTransform(scale, 0, 0, scale, offsetX, offsetY);
+
+      for (const stroke of strokes) {
+        ctx.beginPath();
+        ctx.strokeStyle = stroke.color;
+        ctx.lineWidth = stroke.size;
+        ctx.lineCap = "round";
+        const points = stroke.points;
+        if (points.length > 0) {
+          ctx.moveTo(points[0].x, points[0].y);
+          for (let i = 1; i < points.length; i++) {
+            ctx.lineTo(points[i].x, points[i].y);
+          }
+          ctx.stroke();
+        }
+      }
     }
 
     function getTouchPos(touch) {
@@ -109,7 +127,13 @@
     canvas.addEventListener("touchstart", (e) => {
       if (e.touches.length === 1) {
         const pos = getTouchPos(e.touches[0]);
-        startDrawing(pos.x, pos.y);
+        currentStroke = {
+          color: colorPicker.value,
+          size: parseInt(brushSize.value),
+          points: [pos],
+        };
+        strokes.push(currentStroke);
+        painting = true;
       } else if (e.touches.length === 2) {
         lastTouchDistance = getDistance(e.touches[0], e.touches[1]);
       } else if (e.touches.length === 3) {
@@ -120,24 +144,24 @@
 
     canvas.addEventListener("touchmove", (e) => {
       e.preventDefault();
+
       if (e.touches.length === 1 && painting) {
         const pos = getTouchPos(e.touches[0]);
-        draw(pos.x, pos.y);
+        currentStroke.points.push(pos);
+        redraw();
       } else if (e.touches.length === 2) {
         const newDist = getDistance(e.touches[0], e.touches[1]);
-        const delta = newDist - lastTouchDistance;
-        const zoomAmount = delta * 0.005;
+        const zoomAmount = newDist / lastTouchDistance;
 
-        // زوم بالنسبة لنقطة المنتصف
         const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
         const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-        const canvasRect = canvas.getBoundingClientRect();
-        const zoomCenterX = (midX - canvasRect.left - offsetX) / scale;
-        const zoomCenterY = (midY - canvasRect.top - offsetY) / scale;
+        const rect = canvas.getBoundingClientRect();
+        const worldX = (midX - rect.left - offsetX) / scale;
+        const worldY = (midY - rect.top - offsetY) / scale;
 
-        scale *= 1 + zoomAmount;
-        offsetX -= zoomCenterX * zoomAmount * scale;
-        offsetY -= zoomCenterY * zoomAmount * scale;
+        scale *= zoomAmount;
+        offsetX = midX - worldX * scale;
+        offsetY = midY - worldY * scale;
 
         lastTouchDistance = newDist;
         redraw();
@@ -156,39 +180,28 @@
       painting = false;
     });
 
-    function startDrawing(x, y) {
-      painting = true;
-      lastX = x;
-      lastY = y;
-    }
-
-    function draw(x, y) {
-      ctx.save();
-      ctx.setTransform(scale, 0, 0, scale, offsetX, offsetY);
-      ctx.beginPath();
-      ctx.moveTo(lastX, lastY);
-      ctx.lineTo(x, y);
-      ctx.strokeStyle = colorPicker.value;
-      ctx.lineWidth = brushSize.value;
-      ctx.lineCap = "round";
-      ctx.stroke();
-      ctx.restore();
-      lastX = x;
-      lastY = y;
-    }
-
     clearBtn.addEventListener("click", () => {
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      strokes = [];
       redraw();
     });
 
     saveBtn.addEventListener("click", () => {
+      // نرسم بدون تحويل مؤقتًا لحفظ الصورة
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.setTransform(scale, 0, 0, scale, offsetX, offsetY);
+      redraw();
+
       const link = document.createElement("a");
       link.download = "رسمتي.png";
       link.href = canvas.toDataURL();
       link.click();
+
+      redraw(); // نرجع الرسم تاني
     });
   </script>
 </body>
 </html>
+
