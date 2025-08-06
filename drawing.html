@@ -3,15 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>رسم للموبايل</title>
+  <title>رسم مع زوم و بان</title>
   <style>
     body, html {
       margin: 0;
       padding: 0;
-      touch-action: none;
       overflow: hidden;
+      touch-action: none;
       font-family: sans-serif;
-      background: #f0f0f0;
     }
 
     #menu {
@@ -42,7 +41,7 @@
     canvas {
       display: block;
       position: absolute;
-      top: 80px; /* تحت المنيو */
+      top: 80px;
       left: 0;
       right: 0;
       bottom: 0;
@@ -63,32 +62,99 @@
   <canvas id="canvas"></canvas>
 
   <script>
-    const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d');
-    const colorPicker = document.getElementById('colorPicker');
-    const brushSize = document.getElementById('brushSize');
-    const clearBtn = document.getElementById('clearBtn');
-    const saveBtn = document.getElementById('saveBtn');
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+    const colorPicker = document.getElementById("colorPicker");
+    const brushSize = document.getElementById("brushSize");
+    const clearBtn = document.getElementById("clearBtn");
+    const saveBtn = document.getElementById("saveBtn");
 
     let painting = false;
     let lastX = 0;
     let lastY = 0;
 
+    let scale = 1;
+    let offsetX = 0;
+    let offsetY = 0;
+
+    let lastTouchDistance = 0;
+    let lastPanX = 0;
+    let lastPanY = 0;
+
     function resizeCanvas() {
       canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight - document.getElementById('menu').offsetHeight;
+      canvas.height = window.innerHeight - document.getElementById("menu").offsetHeight;
+      redraw();
     }
 
-    window.addEventListener('resize', resizeCanvas);
+    window.addEventListener("resize", resizeCanvas);
     resizeCanvas();
+
+    function redraw() {
+      ctx.setTransform(scale, 0, 0, scale, offsetX, offsetY);
+    }
 
     function getTouchPos(touch) {
       const rect = canvas.getBoundingClientRect();
       return {
-        x: touch.clientX - rect.left,
-        y: touch.clientY - rect.top
+        x: (touch.clientX - rect.left - offsetX) / scale,
+        y: (touch.clientY - rect.top - offsetY) / scale,
       };
     }
+
+    function getDistance(t1, t2) {
+      return Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+    }
+
+    canvas.addEventListener("touchstart", (e) => {
+      if (e.touches.length === 1) {
+        const pos = getTouchPos(e.touches[0]);
+        startDrawing(pos.x, pos.y);
+      } else if (e.touches.length === 2) {
+        lastTouchDistance = getDistance(e.touches[0], e.touches[1]);
+      } else if (e.touches.length === 3) {
+        lastPanX = e.touches[0].clientX;
+        lastPanY = e.touches[0].clientY;
+      }
+    });
+
+    canvas.addEventListener("touchmove", (e) => {
+      e.preventDefault();
+      if (e.touches.length === 1 && painting) {
+        const pos = getTouchPos(e.touches[0]);
+        draw(pos.x, pos.y);
+      } else if (e.touches.length === 2) {
+        const newDist = getDistance(e.touches[0], e.touches[1]);
+        const delta = newDist - lastTouchDistance;
+        const zoomAmount = delta * 0.005;
+
+        // زوم بالنسبة لنقطة المنتصف
+        const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+        const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+        const canvasRect = canvas.getBoundingClientRect();
+        const zoomCenterX = (midX - canvasRect.left - offsetX) / scale;
+        const zoomCenterY = (midY - canvasRect.top - offsetY) / scale;
+
+        scale *= 1 + zoomAmount;
+        offsetX -= zoomCenterX * zoomAmount * scale;
+        offsetY -= zoomCenterY * zoomAmount * scale;
+
+        lastTouchDistance = newDist;
+        redraw();
+      } else if (e.touches.length === 3) {
+        const dx = e.touches[0].clientX - lastPanX;
+        const dy = e.touches[0].clientY - lastPanY;
+        offsetX += dx;
+        offsetY += dy;
+        lastPanX = e.touches[0].clientX;
+        lastPanY = e.touches[0].clientY;
+        redraw();
+      }
+    });
+
+    canvas.addEventListener("touchend", (e) => {
+      painting = false;
+    });
 
     function startDrawing(x, y) {
       painting = true;
@@ -97,50 +163,29 @@
     }
 
     function draw(x, y) {
-      if (!painting) return;
+      ctx.save();
+      ctx.setTransform(scale, 0, 0, scale, offsetX, offsetY);
       ctx.beginPath();
       ctx.moveTo(lastX, lastY);
       ctx.lineTo(x, y);
       ctx.strokeStyle = colorPicker.value;
       ctx.lineWidth = brushSize.value;
-      ctx.lineCap = 'round';
+      ctx.lineCap = "round";
       ctx.stroke();
+      ctx.restore();
       lastX = x;
       lastY = y;
     }
 
-    function stopDrawing() {
-      painting = false;
-    }
-
-    // Touch events only
-    canvas.addEventListener('touchstart', (e) => {
-      if (e.touches.length === 1) {
-        const pos = getTouchPos(e.touches[0]);
-        startDrawing(pos.x, pos.y);
-      }
-    });
-
-    canvas.addEventListener('touchmove', (e) => {
-      e.preventDefault();
-      if (e.touches.length === 1) {
-        const pos = getTouchPos(e.touches[0]);
-        draw(pos.x, pos.y);
-      }
-    });
-
-    canvas.addEventListener('touchend', stopDrawing);
-    canvas.addEventListener('touchcancel', stopDrawing);
-
-    // Clear
-    clearBtn.addEventListener('click', () => {
+    clearBtn.addEventListener("click", () => {
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, canvas.width, canvas.height);
+      redraw();
     });
 
-    // Save
-    saveBtn.addEventListener('click', () => {
-      const link = document.createElement('a');
-      link.download = 'رسمتي.png';
+    saveBtn.addEventListener("click", () => {
+      const link = document.createElement("a");
+      link.download = "رسمتي.png";
       link.href = canvas.toDataURL();
       link.click();
     });
