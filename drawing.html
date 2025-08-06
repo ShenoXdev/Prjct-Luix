@@ -91,7 +91,7 @@
   let undonePaths = [];
   let currentPath = null;
   let drawing = false;
-  let hasMoved = false; // لتتبع إذا كان المستخدم حرك إصبعه/الفأرة
+  let hasMoved = false;
   let lastX = 0;
   let lastY = 0;
 
@@ -103,9 +103,15 @@
   let lastTouchDist = 0;
   let zoomEndTime = 0;
   const ZOOM_COOLDOWN = 200;
+  const MIN_ZOOM = 1e-25; // 0.0000000000000000000000001
+  const MAX_ZOOM = 1e25;
 
   function updateZoomInfo() {
-    zoomInfo.textContent = `زوم: ${zoom.toFixed(2)}x`;
+    if (zoom < 0.0001 || zoom > 10000) {
+      zoomInfo.textContent = `زوم: ${zoom.toExponential(2)}x`;
+    } else {
+      zoomInfo.textContent = `زوم: ${zoom.toFixed(zoom >= 1 ? 2 : 8)}x`;
+    }
   }
 
   function drawAll() {
@@ -143,7 +149,7 @@
   function zoomToPoint(pointX, pointY, newZoom) {
     const canvasX = pointX * zoom + panX;
     const canvasY = pointY * zoom + panY;
-    zoom = Math.max(0.1, Math.min(newZoom, 10));
+    zoom = Math.max(MIN_ZOOM, Math.min(newZoom, MAX_ZOOM));
     panX = canvasX - pointX * zoom;
     panY = canvasY - pointY * zoom;
     drawAll();
@@ -191,14 +197,12 @@
       const touch = e.touches[0];
       const pos = getCanvasPos(touch);
       
-      // لا ترسم إذا لم يتحرك الإصبع بشكل كافي
       const dx = pos.x - lastX;
       const dy = pos.y - lastY;
       const dist = Math.sqrt(dx * dx + dy * dy);
       
-      if (dist > 0.5) { // حد أدنى للحركة
+      if (dist > 0.5) {
         if (!hasMoved) {
-          // بداية المسار بعد الحركة الأولى فقط
           currentPath.points.push({x: lastX, y: lastY});
           hasMoved = true;
         }
@@ -253,14 +257,12 @@
     if (drawing) {
       const pos = getCanvasPos(e);
       
-      // لا ترسم إذا لم تتحرك الفأرة بشكل كافي
       const dx = pos.x - lastX;
       const dy = pos.y - lastY;
       const dist = Math.sqrt(dx * dx + dy * dy);
       
-      if (dist > 0.5) { // حد أدنى للحركة
+      if (dist > 0.5) {
         if (!hasMoved) {
-          // بداية المسار بعد الحركة الأولى فقط
           currentPath.points.push({x: lastX, y: lastY});
           hasMoved = true;
         }
