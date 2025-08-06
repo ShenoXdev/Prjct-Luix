@@ -1,200 +1,87 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>تطبيق رسم متقدم</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>رسم على صفحة الويب</title>
   <style>
-    :root {
-      --primary-color: #4a6bff;
-      --secondary-color: #f5f7ff;
-      --dark-color: #2c3e50;
-      --light-color: #ffffff;
-      --shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-      --border-radius: 12px;
-      --transition: all 0.3s ease;
-    }
-    
     html, body {
-      margin: 0; 
-      padding: 0; 
-      height: 100%; 
+      margin: 0;
+      padding: 0;
       overflow: hidden;
       touch-action: none;
-      background: #f5f5f5;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
-    
-    #canvas {
-      position: absolute;
-      top: 0; 
-      left: 0; 
-      width: 100%; 
-      height: 100%;
-      touch-action: none;
-      background: white;
+    canvas {
       display: block;
-      box-shadow: var(--shadow);
-    }
-    
-    #toolbar {
-      position: fixed;
-      bottom: 20px; 
-      left: 50%; 
-      transform: translateX(-50%);
-      background: var(--light-color);
-      padding: 12px 16px;
-      border-radius: var(--border-radius);
-      display: flex;
-      gap: 10px;
-      z-index: 100;
-      flex-wrap: wrap;
-      justify-content: center;
-      box-shadow: var(--shadow);
-      border: 1px solid rgba(0,0,0,0.1);
-      max-width: 95%;
-    }
-    
-    #zoomInfo {
-      position: fixed;
-      top: 20px; 
-      left: 20px;
-      background: rgba(0,0,0,0.7);
-      padding: 8px 16px;
-      border-radius: 20px;
-      color: white;
-      font-size: 14px;
-      user-select: none;
-      z-index: 100;
-      backdrop-filter: blur(5px);
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    
-    #zoomInfo::before {
-      content: "🔍";
+      background: white;
     }
   </style>
 </head>
 <body>
+  <canvas id="canvas"></canvas>
 
-<canvas id="canvas"></canvas>
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
 
-<!-- بقية العناصر كما هي ... -->
+    let painting = false;
+    let lastX = 0;
+    let lastY = 0;
 
-<script>
-  // ... المتغيرات السابقة ...
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
 
-  // دالة محسنة للتحويل من إحداثيات الشاشة إلى العالم
-  function screenToWorld(x, y) {
-    return {
-      x: (x - offsetX) / scale,
-      y: (y - offsetY) / scale
-    };
-  }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
 
-  // دالة محسنة للتحويل من إحداثيات العالم إلى الشاشة
-  function worldToScreen(x, y) {
-    return {
-      x: x * scale + offsetX,
-      y: y * scale + offsetY
-    };
-  }
+    function startDrawing(x, y) {
+      painting = true;
+      [lastX, lastY] = [x, y];
+    }
 
-  // دالة محسنة للزوم مع نقطة مركز ثابتة
-  function zoomAtPoint(zoomFactor, centerX, centerY) {
-    // حفظ الإحداثيات العالمية لنقطة المركز قبل التكبير
-    const worldBefore = screenToWorld(centerX, centerY);
-    
-    // تطبيق عامل التكبير
-    const newScale = scale * zoomFactor;
-    
-    // تحديد الحدود الدنيا والعليا للتكبير
-    const minScale = 0.1;
-    const maxScale = 20;
-    scale = Math.min(Math.max(newScale, minScale), maxScale);
-    
-    // حساب الإحداثيات العالمية لنقطة المركز بعد التكبير
-    const worldAfter = screenToWorld(centerX, centerY);
-    
-    // تعديل الإزاحة للحفاظ على نقطة المركز ثابتة
-    offsetX += (worldBefore.x - worldAfter.x) * scale;
-    offsetY += (worldBefore.y - worldAfter.y) * scale;
-    
-    updateZoomInfo();
-    redraw();
-  }
+    function draw(x, y) {
+      if (!painting) return;
+      ctx.beginPath();
+      ctx.moveTo(lastX, lastY);
+      ctx.lineTo(x, y);
+      ctx.strokeStyle = 'black';
+      ctx.lineWidth = 3;
+      ctx.lineCap = 'round';
+      ctx.stroke();
+      [lastX, lastY] = [x, y];
+    }
 
-  // تحسين حدث الزوم بعجلة الماوس
-  canvas.addEventListener("wheel", (e) => {
-    e.preventDefault();
-    
-    // تحديد سرعة الزوم بناءً على اتجاه العجلة
-    const zoomSpeed = 0.002;
-    const zoomFactor = Math.exp(-e.deltaY * zoomSpeed);
-    
-    // استخدام موقع المؤشر كنقطة مركز للزوم
-    zoomAtPoint(zoomFactor, e.clientX, e.clientY);
-  }, { passive: false });
+    function stopDrawing() {
+      painting = false;
+    }
 
-  // تحسين الزوم باللمس (إصبعين)
-  canvas.addEventListener("touchmove", (e) => {
-    e.preventDefault();
+    // Mouse events
+    canvas.addEventListener('mousedown', (e) => startDrawing(e.offsetX, e.offsetY));
+    canvas.addEventListener('mousemove', (e) => draw(e.offsetX, e.offsetY));
+    canvas.addEventListener('mouseup', stopDrawing);
+    canvas.addEventListener('mouseout', stopDrawing);
 
-    if (e.touches.length === 2) {
-      const touch1 = e.touches[0];
-      const touch2 = e.touches[1];
-      
-      // حساب المسافة الحالية بين الأصابع
-      const currentDist = Math.hypot(
-        touch2.clientX - touch1.clientX,
-        touch2.clientY - touch1.clientY
-      );
-      
-      // إذا كانت هذه هي الحركة الأولى، نخزن المسافة الأولية فقط
-      if (!lastDist) {
-        lastDist = currentDist;
-        return;
+    // Touch events
+    canvas.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 1) {
+        const touch = e.touches[0];
+        const rect = canvas.getBoundingClientRect();
+        startDrawing(touch.clientX - rect.left, touch.clientY - rect.top);
       }
-      
-      // حساب عامل الزوم بناءً على التغير في المسافة
-      const zoomFactor = currentDist / lastDist;
-      
-      // حساب نقطة المنتصف بين الأصابع كنقطة مركز للزوم
-      const centerX = (touch1.clientX + touch2.clientX) / 2;
-      const centerY = (touch1.clientY + touch2.clientY) / 2;
-      
-      // تطبيق الزوم
-      zoomAtPoint(zoomFactor, centerX, centerY);
-      
-      // حفظ المسافة الحالية للمقارنة في الحركة التالية
-      lastDist = currentDist;
-    }
-  }, { passive: false });
+    });
 
-  // تحسين حدث نهاية اللمس
-  canvas.addEventListener("touchend", (e) => {
-    if (e.touches.length < 2) {
-      lastDist = null; // إعادة تعيين المسافة عند رفع أحد الأصابع
-    }
-  });
+    canvas.addEventListener('touchmove', (e) => {
+      e.preventDefault(); // منع التمرير أثناء الرسم
+      if (e.touches.length === 1) {
+        const touch = e.touches[0];
+        const rect = canvas.getBoundingClientRect();
+        draw(touch.clientX - rect.left, touch.clientY - rect.top);
+      }
+    });
 
-  // دالة محسنة لإعادة الرسم مع تطبيق التحويلات
-  function redraw() {
-    // حفظ حالة السياق الحالية
-    ctx.save();
-    
-    // تطبيق التحويلات (الإزاحة والقياس)
-    ctx.setTransform(scale, 0, 0, scale, offsetX, offsetY);
-    
-    // هنا يمكنك إضافة أي عمليات رسم إضافية إذا لزم الأمر
-    
-    // استعادة حالة السياق
-    ctx.restore();
-  }
-
-  // ... بقية الكود كما هو ...
-</script>
+    canvas.addEventListener('touchend', stopDrawing);
+  </script>
 </body>
 </html>
