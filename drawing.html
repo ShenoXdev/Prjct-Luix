@@ -57,40 +57,20 @@
       border-radius: 5px;
       box-shadow: 0 2px 10px rgba(0,0,0,0.2);
       z-index: 20;
-      max-height: 70vh;
-      overflow-y: auto;
     }
-    .tool-btn {
-      font-size: 24px;
+    #toolsMenu button {
+      display: block;
+      margin: 5px 0;
+      font-size: 20px;
       background: none;
       border: none;
       cursor: pointer;
-      padding: 5px;
-      border-radius: 5px;
     }
-    .tool-btn.active {
-      background: #ddd;
-    }
-    #brushControls {
-      display: flex;
-      align-items: center;
-      gap: 5px;
-    }
-    #brushPreview {
-      width: 50px;
-      height: 50px;
-      border: 1px solid #ccc;
-      border-radius: 50%;
-      margin-left: 10px;
-    }
-    .tool-option {
-      display: flex;
-      align-items: center;
-      padding: 8px;
-      border-bottom: 1px solid #ddd;
-    }
-    .tool-option:last-child {
-      border-bottom: none;
+    .tool-btn {
+      font-size: 20px;
+      background: none;
+      border: none;
+      cursor: pointer;
     }
   </style>
 </head>
@@ -98,75 +78,30 @@
 
 <div id="menu">
   <button class="tool-btn" id="toolsBtn">🛠️</button>
-  <div id="brushControls">
-    <input type="color" id="colorPicker" value="#000000">
-    <input type="range" id="brushSize" min="1" max="100" value="10" step="1">
-    <div id="brushPreview"></div>
-  </div>
+  <label>🎨 <input type="color" id="colorPicker" value="#000000"></label>
+  <label>🖌️ <input type="number" id="brushSize" min="1" max="100" value="10" step="1"></label>
   <button class="tool-btn" id="undoBtn">↩️</button>
   <button class="tool-btn" id="redoBtn">↪️</button>
   <button class="tool-btn" id="clearBtn">🧹</button>
   <button class="tool-btn" id="saveBtn">💾</button>
+  <button class="tool-btn" id="saveJsonBtn">📁</button>
+  <button class="tool-btn" id="loadJsonBtn">📂</button>
   <input type="file" id="jsonFileInput" accept=".json">
 </div>
 
 <div id="toolsMenu">
-  <div class="tool-option">
-    <button class="tool-btn active" data-tool="pen" title="قلم">✏️</button>
-    <span>قلم</span>
-  </div>
-  <div class="tool-option">
-    <button class="tool-btn" data-tool="highlighter" title="هايلايتر">🖍️</button>
-    <span>هايلايتر</span>
-  </div>
-  <div class="tool-option">
-    <button class="tool-btn" data-tool="pencil" title="قلم رصاص">📝</button>
-    <span>قلم رصاص</span>
-  </div>
-  <div class="tool-option">
-    <button class="tool-btn" data-tool="fountainPen" title="قلم حبر">🖋️</button>
-    <span>قلم حبر</span>
-  </div>
-  <div class="tool-option">
-    <button class="tool-btn" data-tool="airbrush" title="رذاذ">🎨</button>
-    <span>رذاذ</span>
-  </div>
-  <div class="tool-option">
-    <button class="tool-btn" data-tool="eraser" title="ممحاة">🧼</button>
-    <span>ممحاة</span>
-  </div>
-  <div class="tool-option">
-    <button class="tool-btn" data-tool="softEraser" title="ممحاة ناعمة">🧽</button>
-    <span>ممحاة ناعمة</span>
-  </div>
-  <div class="tool-option">
-    <button class="tool-btn" data-tool="blender" title="مزج">🌀</button>
-    <span>مزج</span>
-  </div>
-  <div class="tool-option">
-    <button class="tool-btn" data-tool="fill" title="تعبئة">🟦</button>
-    <span>تعبئة</span>
-  </div>
-  <div class="tool-option">
-    <button class="tool-btn" data-tool="glowpen" title="قلم مضيء">✨</button>
-    <span>قلم مضيء</span>
-  </div>
-  <div class="tool-option">
-    <button class="tool-btn" data-tool="pixelpen" title="قلم بيكسلي">🧊</button>
-    <span>قلم بيكسلي</span>
-  </div>
-  <div class="tool-option">
-    <button class="tool-btn" data-tool="line" title="خط">📏</button>
-    <span>خط</span>
-  </div>
-  <div class="tool-option">
-    <button class="tool-btn" data-tool="calligraphy" title="خط عربي">🖌️</button>
-    <span>خط عربي</span>
-  </div>
-  <div class="tool-option">
-    <button class="tool-btn" data-tool="spray" title="رش">💦</button>
-    <span>رش</span>
-  </div>
+  <button data-tool="pen">✏️ قلم</button>
+  <button data-tool="highlighter">🖍️ هايلايتر</button>
+  <button data-tool="pencil">📝 قلم رصاص</button>
+  <button data-tool="fountainPen">🖋️ قلم حبر</button>
+  <button data-tool="airbrush">🎨 رذاذ</button>
+  <button data-tool="eraser">🧼 ممحاة</button>
+  <button data-tool="softEraser">🧽 ممحاة ناعمة</button>
+  <button data-tool="blender">🌀 مزج</button>
+  <button data-tool="fill">🟦 تعبئة</button>
+  <button data-tool="glowpen">✨ قلم مضيء</button>
+  <button data-tool="pixelpen">🧊 قلم بيكسلي</button>
+  <button data-tool="line">📏 خط</button>
 </div>
 
 <canvas id="canvas"></canvas>
@@ -174,18 +109,19 @@
 
 <script>
   const canvas = document.getElementById("canvas");
-  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  const ctx = canvas.getContext("2d");
   const colorPicker = document.getElementById("colorPicker");
   const brushSize = document.getElementById("brushSize");
   const undoBtn = document.getElementById("undoBtn");
   const redoBtn = document.getElementById("redoBtn");
   const clearBtn = document.getElementById("clearBtn");
   const saveBtn = document.getElementById("saveBtn");
+  const saveJsonBtn = document.getElementById("saveJsonBtn");
+  const loadJsonBtn = document.getElementById("loadJsonBtn");
   const jsonFileInput = document.getElementById("jsonFileInput");
   const zoomInfo = document.getElementById("zoomInfo");
   const toolsBtn = document.getElementById("toolsBtn");
   const toolsMenu = document.getElementById("toolsMenu");
-  const brushPreview = document.getElementById("brushPreview");
 
   // Initialize canvas
   let width = window.innerWidth;
@@ -202,22 +138,6 @@
   let lastX = 0;
   let lastY = 0;
   let currentTool = 'pen';
-  let startPoint = null;
-  let isDrawingLine = false;
-  let tempCanvas = document.createElement('canvas');
-  let tempCtx = tempCanvas.getContext('2d');
-  tempCanvas.width = canvas.width;
-  tempCanvas.height = canvas.height;
-
-  // Brush preview
-  function updateBrushPreview() {
-    const size = brushSize.value;
-    const color = colorPicker.value;
-    brushPreview.style.width = `${size}px`;
-    brushPreview.style.height = `${size}px`;
-    brushPreview.style.backgroundColor = color;
-    brushPreview.style.opacity = currentTool === 'highlighter' ? '0.5' : '1';
-  }
 
   // Zoom state
   let zoom = 1;
@@ -229,24 +149,6 @@
   const ZOOM_COOLDOWN = 200;
   const MIN_ZOOM = 1e-25;
   const MAX_ZOOM = 1e25;
-
-  // Tool settings
-  const toolSettings = {
-    pen: { opacity: 1.0, pressure: true, flow: 1.0 },
-    highlighter: { opacity: 0.4, pressure: false, flow: 0.7 },
-    pencil: { opacity: 0.8, pressure: true, flow: 0.9 },
-    fountainPen: { opacity: 1.0, pressure: true, flow: 1.2 },
-    airbrush: { opacity: 0.6, pressure: true, flow: 0.5 },
-    eraser: { opacity: 1.0, pressure: true, flow: 1.0 },
-    softEraser: { opacity: 0.3, pressure: true, flow: 0.7 },
-    blender: { opacity: 0.5, pressure: true, flow: 0.8 },
-    fill: { opacity: 1.0, pressure: false, flow: 1.0 },
-    glowpen: { opacity: 0.8, pressure: true, flow: 1.0 },
-    pixelpen: { opacity: 1.0, pressure: false, flow: 1.0 },
-    line: { opacity: 1.0, pressure: false, flow: 1.0 },
-    calligraphy: { opacity: 1.0, pressure: true, flow: 1.2 },
-    spray: { opacity: 0.7, pressure: true, flow: 0.6 }
-  };
 
   function updateZoomInfo() {
     if (zoom < 0.0001 || zoom > 10000) {
@@ -261,126 +163,29 @@
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.setTransform(zoom, 0, 0, zoom, panX, panY);
 
-    // Draw all paths
     for (let path of paths) {
-      drawPath(path);
-    }
-
-    // Draw current path if exists
-    if (currentPath && (currentPath.points.length > 1 || currentTool === 'line')) {
-      drawPath(currentPath);
-    }
-
-    updateZoomInfo();
-  }
-
-  function drawPath(path) {
-    const settings = toolSettings[path.tool];
-    ctx.globalAlpha = settings.opacity;
-    ctx.strokeStyle = path.color;
-    ctx.fillStyle = path.color;
-    ctx.lineWidth = path.size;
-    
-    // Special tool settings
-    switch(path.tool) {
-      case 'highlighter':
-        ctx.globalCompositeOperation = 'multiply';
-        break;
-      case 'eraser':
-      case 'softEraser':
-        ctx.globalCompositeOperation = 'destination-out';
-        break;
-      case 'blender':
-        ctx.globalCompositeOperation = 'lighter';
-        break;
-      case 'glowpen':
-        ctx.shadowBlur = path.size / 2;
-        ctx.shadowColor = path.color;
-        break;
-      case 'pixelpen':
-        ctx.lineCap = 'square';
-        ctx.lineJoin = 'miter';
-        break;
-      case 'calligraphy':
-        ctx.lineCap = 'butt';
-        ctx.lineJoin = 'round';
-        break;
-      default:
-        ctx.globalCompositeOperation = 'source-over';
-        ctx.shadowBlur = 0;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-    }
-
-    if (path.tool === 'line' && path.points.length === 2) {
-      ctx.beginPath();
-      ctx.moveTo(path.points[0].x, path.points[0].y);
-      ctx.lineTo(path.points[1].x, path.points[1].y);
-      ctx.stroke();
-    } 
-    else if (path.tool === 'fill') {
-      // Fill tool implementation would go here
-    }
-    else if (path.tool === 'spray') {
-      drawSpray(path);
-    }
-    else if (path.points.length > 1) {
-      ctx.beginPath();
-      ctx.moveTo(path.points[0].x, path.points[0].y);
+      ctx.strokeStyle = path.color;
+      ctx.lineWidth = path.size;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.globalAlpha = 1.0;
+      ctx.globalCompositeOperation = 'source-over';
       
-      for (let i = 1; i < path.points.length; i++) {
-        const point = path.points[i];
-        ctx.lineTo(point.x, point.y);
-        
-        // For calligraphy pen - variable width based on angle
-        if (path.tool === 'calligraphy' && i > 0) {
-          const prevPoint = path.points[i-1];
-          const angle = Math.atan2(point.y - prevPoint.y, point.x - prevPoint.x);
-          ctx.lineWidth = path.size * (0.5 + Math.abs(Math.cos(angle)) * 0.5;
-        }
-        
-        ctx.stroke();
+      if (path.tool === 'line' && path.points.length === 2) {
         ctx.beginPath();
-        ctx.moveTo(point.x, point.y);
-      }
-    }
-    
-    // Reset context settings
-    ctx.globalAlpha = 1.0;
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.shadowBlur = 0;
-  }
-
-  function drawSpray(path) {
-    const density = path.size * 2;
-    const radius = path.size / 2;
-    ctx.globalAlpha = toolSettings.spray.opacity;
-    
-    for (let i = 1; i < path.points.length; i++) {
-      const point = path.points[i];
-      const prevPoint = path.points[i-1] || point;
-      
-      const dist = Math.hypot(point.x - prevPoint.x, point.y - prevPoint.y);
-      const steps = Math.max(1, Math.floor(dist * density / 10));
-      
-      for (let j = 0; j <= steps; j++) {
-        const t = j / steps;
-        const x = prevPoint.x + t * (point.x - prevPoint.x);
-        const y = prevPoint.y + t * (point.y - prevPoint.y);
-        
-        const particles = Math.floor(path.size / 2);
-        for (let p = 0; p < particles; p++) {
-          const angle = Math.random() * Math.PI * 2;
-          const r = Math.random() * radius;
-          const px = x + Math.cos(angle) * r;
-          const py = y + Math.sin(angle) * r;
-          
-          ctx.beginPath();
-          ctx.arc(px, py, 0.5, 0, Math.PI * 2);
-          ctx.fill();
+        ctx.moveTo(path.points[0].x, path.points[0].y);
+        ctx.lineTo(path.points[1].x, path.points[1].y);
+        ctx.stroke();
+      } else {
+        ctx.beginPath();
+        for (let i = 0; i < path.points.length - 1; i++) {
+          ctx.moveTo(path.points[i].x, path.points[i].y);
+          ctx.lineTo(path.points[i + 1].x, path.points[i + 1].y);
         }
+        ctx.stroke();
       }
     }
+    updateZoomInfo();
   }
 
   function getCanvasPos(e) {
@@ -405,34 +210,19 @@
   }
 
   // Tools menu
-  toolsBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
+  toolsBtn.addEventListener("click", () => {
     toolsMenu.style.display = toolsMenu.style.display === 'block' ? 'none' : 'block';
   });
 
-  document.querySelectorAll('#toolsMenu [data-tool]').forEach(btn => {
+  document.querySelectorAll('#toolsMenu button').forEach(btn => {
     btn.addEventListener("click", (e) => {
-      currentTool = e.currentTarget.dataset.tool;
-      document.querySelectorAll('#toolsMenu [data-tool]').forEach(b => {
-        b.classList.remove('active');
-      });
-      e.currentTarget.classList.add('active');
+      currentTool = e.target.dataset.tool;
       toolsMenu.style.display = 'none';
-      updateBrushPreview();
     });
   });
 
-  // Brush controls
-  colorPicker.addEventListener("input", updateBrushPreview);
-  brushSize.addEventListener("input", updateBrushPreview);
-
   // Touch events
   canvas.addEventListener("touchstart", (e) => {
-    if (toolsMenu.style.display === 'block') {
-      toolsMenu.style.display = 'none';
-      return;
-    }
-    
     e.preventDefault();
     
     if (e.touches.length === 2) {
@@ -443,12 +233,6 @@
       const pos = getCanvasPos(e.touches[0]);
       lastX = pos.x;
       lastY = pos.y;
-      
-      if (currentTool === 'line') {
-        startPoint = pos;
-        isDrawingLine = true;
-      }
-      
       currentPath = {
         tool: currentTool,
         color: colorPicker.value,
@@ -480,39 +264,28 @@
       const touch = e.touches[0];
       const pos = getCanvasPos(touch);
       
-      if (currentTool === 'line') {
-        if (currentPath.points.length > 1) {
-          currentPath.points.pop();
+      const dx = pos.x - lastX;
+      const dy = pos.y - lastY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      
+      if (dist > 0.5) {
+        if (!hasMoved) {
+          currentPath.points.push({x: lastX, y: lastY});
+          hasMoved = true;
         }
         currentPath.points.push(pos);
-      } 
-      else {
-        const dx = pos.x - lastX;
-        const dy = pos.y - lastY;
-        const dist = Math.sqrt(dx * dx + dy * dy);
         
-        if (dist > 0.5) {
-          if (!hasMoved) {
-            currentPath.points.push({x: lastX, y: lastY});
-            hasMoved = true;
-          }
-          
-          // Add pressure sensitivity for supported tools
-          const pressure = touch.force || 0.5;
-          const adjustedSize = currentPath.size * 
-            (toolSettings[currentTool].pressure ? (0.5 + pressure * 0.5) : 1);
-          
-          currentPath.points.push({
-            x: pos.x,
-            y: pos.y,
-            size: adjustedSize
-          });
-        }
+        ctx.strokeStyle = currentPath.color;
+        ctx.lineWidth = currentPath.size;
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(lastX, lastY);
+        ctx.lineTo(pos.x, pos.y);
+        ctx.stroke();
+        
+        lastX = pos.x;
+        lastY = pos.y;
       }
-      
-      lastX = pos.x;
-      lastY = pos.y;
-      drawAll();
     }
   });
 
@@ -522,37 +295,21 @@
       zoomEndTime = Date.now();
     }
     
-    if (drawing) {
-      if ((currentTool === 'line' && currentPath.points.length === 2) || 
-          (hasMoved && currentPath.points.length > 1)) {
-        paths.push(currentPath);
-        undonePaths = [];
-      }
-      
-      drawing = false;
-      isDrawingLine = false;
-      currentPath = null;
-      hasMoved = false;
+    if (drawing && hasMoved && currentPath.points.length > 1) {
+      paths.push(currentPath);
+      undonePaths = [];
     }
+    drawing = false;
+    currentPath = null;
+    hasMoved = false;
   });
 
   // Mouse events (for desktop)
   canvas.addEventListener("mousedown", (e) => {
-    if (toolsMenu.style.display === 'block') {
-      toolsMenu.style.display = 'none';
-      return;
-    }
-    
     if (Date.now() - zoomEndTime > ZOOM_COOLDOWN) {
       const pos = getCanvasPos(e);
       lastX = pos.x;
       lastY = pos.y;
-      
-      if (currentTool === 'line') {
-        startPoint = pos;
-        isDrawingLine = true;
-      }
-      
       currentPath = {
         tool: currentTool,
         color: colorPicker.value,
@@ -568,73 +325,49 @@
     if (drawing) {
       const pos = getCanvasPos(e);
       
-      if (currentTool === 'line') {
-        if (currentPath.points.length > 1) {
-          currentPath.points.pop();
+      const dx = pos.x - lastX;
+      const dy = pos.y - lastY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      
+      if (dist > 0.5) {
+        if (!hasMoved) {
+          currentPath.points.push({x: lastX, y: lastY});
+          hasMoved = true;
         }
         currentPath.points.push(pos);
-      } 
-      else {
-        const dx = pos.x - lastX;
-        const dy = pos.y - lastY;
-        const dist = Math.sqrt(dx * dx + dy * dy);
         
-        if (dist > 0.5) {
-          if (!hasMoved) {
-            currentPath.points.push({x: lastX, y: lastY});
-            hasMoved = true;
-          }
-          
-          // Simulate pressure for mouse (based on speed)
-          const now = Date.now();
-          const speed = dist / (now - (currentPath.points[currentPath.points.length-1].time || now));
-          const pressure = Math.min(1, 1 / (speed + 0.1));
-          const adjustedSize = currentPath.size * 
-            (toolSettings[currentTool].pressure ? pressure : 1);
-          
-          currentPath.points.push({
-            x: pos.x,
-            y: pos.y,
-            size: adjustedSize,
-            time: now
-          });
-        }
+        ctx.strokeStyle = currentPath.color;
+        ctx.lineWidth = currentPath.size;
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(lastX, lastY);
+        ctx.lineTo(pos.x, pos.y);
+        ctx.stroke();
+        
+        lastX = pos.x;
+        lastY = pos.y;
       }
-      
-      lastX = pos.x;
-      lastY = pos.y;
-      drawAll();
     }
   });
 
   canvas.addEventListener("mouseup", () => {
-    if (drawing) {
-      if ((currentTool === 'line' && currentPath.points.length === 2) || 
-          (hasMoved && currentPath.points.length > 1)) {
-        paths.push(currentPath);
-        undonePaths = [];
-      }
-      
-      drawing = false;
-      isDrawingLine = false;
-      currentPath = null;
-      hasMoved = false;
+    if (drawing && hasMoved && currentPath.points.length > 1) {
+      paths.push(currentPath);
+      undonePaths = [];
     }
+    drawing = false;
+    currentPath = null;
+    hasMoved = false;
   });
 
   canvas.addEventListener("mouseleave", () => {
-    if (drawing) {
-      if ((currentTool === 'line' && currentPath.points.length === 2) || 
-          (hasMoved && currentPath.points.length > 1)) {
-        paths.push(currentPath);
-        undonePaths = [];
-      }
-      
-      drawing = false;
-      isDrawingLine = false;
-      currentPath = null;
-      hasMoved = false;
+    if (drawing && hasMoved && currentPath.points.length > 1) {
+      paths.push(currentPath);
+      undonePaths = [];
     }
+    drawing = false;
+    currentPath = null;
+    hasMoved = false;
   });
 
   // Button handlers
@@ -652,6 +385,51 @@
     link.download = 'drawing.png';
     link.href = canvas.toDataURL();
     link.click();
+  });
+
+  saveJsonBtn.addEventListener("click", () => {
+    const data = {
+      paths: paths,
+      zoom: zoom,
+      panX: panX,
+      panY: panY
+    };
+    const json = JSON.stringify(data);
+    const blob = new Blob([json], {type: "application/json"});
+    const url = URL.createObjectURL(blob);
+    
+    const link = document.createElement('a');
+    link.download = 'drawing.json';
+    link.href = url;
+    link.click();
+    
+    setTimeout(() => URL.revokeObjectURL(url), 100);
+  });
+
+  loadJsonBtn.addEventListener("click", () => {
+    jsonFileInput.click();
+  });
+
+  jsonFileInput.addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const data = JSON.parse(event.target.result);
+        paths = data.paths || [];
+        zoom = data.zoom || 1;
+        panX = data.panX || 0;
+        panY = data.panY || 0;
+        undonePaths = [];
+        drawAll();
+      } catch (err) {
+        alert("خطأ في تحميل الملف: " + err.message);
+      }
+    };
+    reader.readAsText(file);
+    jsonFileInput.value = '';
   });
 
   undoBtn.addEventListener("click", () => {
@@ -673,8 +451,6 @@
     height = window.innerHeight - 50;
     canvas.width = width;
     canvas.height = height;
-    tempCanvas.width = width;
-    tempCanvas.height = height;
     drawAll();
   });
 
@@ -685,8 +461,7 @@
     }
   });
 
-  // Initialize
-  updateBrushPreview();
+  // Initial draw
   drawAll();
 </script>
 </body>
