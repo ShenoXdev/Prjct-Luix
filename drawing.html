@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>برنامج رسم احترافي</title>
+<title>رسم مع زوم بصباعين وحفظ JSON</title>
 <style>
 html, body {
   margin: 0;
@@ -13,52 +13,29 @@ html, body {
   font-family: sans-serif;
 }
 canvas {
-  width: 100vw;
-  height: 100vh;
-  background: #fffdf9;
+  background: white;
   display: block;
   touch-action: none;
 }
 .toolbar {
   position: fixed;
-  top: 50%;
+  top: 10px;
   left: 10px;
-  transform: translateY(-50%);
   display: flex;
-  flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   z-index: 100;
 }
-.tool-btn, .color-picker, .size-picker {
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
+button {
+  padding: 8px 12px;
   border: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: white;
-  box-shadow: 0 3px 6px rgba(0,0,0,0.15);
-  cursor: pointer;
-  transition: all 0.2s ease-in-out;
-}
-.tool-btn:hover, .color-picker:hover, .size-picker:hover {
-  transform: scale(1.05);
-  background: #f0f0f0;
-}
-.tool-btn img {
-  width: 24px;
-  height: 24px;
-}
-.zoom-info {
-  position: fixed;
-  bottom: 10px;
-  left: 10px;
-  background: rgba(0,0,0,0.65);
+  border-radius: 6px;
+  background: #333;
   color: white;
-  padding: 5px 10px;
-  border-radius: 8px;
-  font-size: 13px;
+  font-size: 14px;
+  cursor: pointer;
+}
+button:hover {
+  background: #555;
 }
 </style>
 </head>
@@ -67,175 +44,151 @@ canvas {
 <canvas id="canvas"></canvas>
 
 <div class="toolbar">
-  <input type="color" id="color" class="color-picker" title="لون القلم">
-  <input type="number" id="size" class="size-picker" value="5" min="1" max="1000000000000000000000000" title="حجم القلم">
-  <button class="tool-btn" id="zoomIn" title="تكبير">＋</button>
-  <button class="tool-btn" id="zoomOut" title="تصغير">－</button>
-  <button class="tool-btn" id="resetZoom" title="إعادة ضبط الزوم">⟳</button>
-  <button class="tool-btn" id="undo" title="تراجع">⟲</button>
-  <button class="tool-btn" id="redo" title="إعادة">⟳</button>
-  <button class="tool-btn" id="open" title="فتح صورة">📂</button>
-  <button class="tool-btn" id="save" title="حفظ">💾</button>
-  <button class="tool-btn" id="clear" title="مسح">🗑</button>
+  <button id="save">💾 حفظ</button>
+  <button id="open">📂 فتح</button>
+  <button id="clear">🗑 مسح</button>
 </div>
-
-<div class="zoom-info" id="zoomInfo">Zoom: 100%</div>
 
 <script>
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
-let drawing = false;
-let color = document.getElementById('color').value;
-let size = document.getElementById('size').value;
+
 let zoom = 1;
 let zoomMin = 0.0000000000000000000000001;
 let zoomMax = 1000000000000000000000000;
-let history = [];
-let historyStep = -1;
-let panX = 0;
-let panY = 0;
-let isPanning = false;
+let panX = 0, panY = 0;
+let drawing = false;
 let lastX, lastY;
+
+let paths = []; // نخزن الرسم كـ JSON
+let currentPath = [];
 
 function resizeCanvas() {
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
-}
-resizeCanvas();
-window.addEventListener('resize', resizeCanvas);
-
-function saveState() {
-  history = history.slice(0, historyStep + 1);
-  history.push(canvas.toDataURL());
-  historyStep++;
-}
-saveState();
-
-canvas.addEventListener('mousedown', e => {
-  if (e.button === 1) {
-    isPanning = true;
-    lastX = e.clientX;
-    lastY = e.clientY;
-    return;
-  }
-  drawing = true;
-  ctx.beginPath();
-  ctx.moveTo((e.clientX - panX) / zoom, (e.clientY - panY) / zoom);
-});
-canvas.addEventListener('mousemove', e => {
-  if (isPanning) {
-    panX += e.clientX - lastX;
-    panY += e.clientY - lastY;
-    lastX = e.clientX;
-    lastY = e.clientY;
-    redraw();
-    return;
-  }
-  if (!drawing) return;
-  ctx.lineWidth = size;
-  ctx.strokeStyle = color;
-  ctx.lineCap = 'round';
-  ctx.lineTo((e.clientX - panX) / zoom, (e.clientY - panY) / zoom);
-  ctx.stroke();
-});
-canvas.addEventListener('mouseup', e => {
-  if (isPanning) { isPanning = false; return; }
-  drawing = false;
-  ctx.closePath();
-  saveState();
-});
-canvas.addEventListener('wheel', e => {
-  const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
-  zoom *= zoomFactor;
-  zoom = Math.min(Math.max(zoom, zoomMin), zoomMax);
-  document.getElementById('zoomInfo').innerText = `Zoom: ${(zoom * 100).toFixed(2)}%`;
   redraw();
-});
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
 
 function redraw() {
-  const img = new Image();
-  img.src = history[historyStep];
-  img.onload = () => {
-    ctx.setTransform(zoom, 0, 0, zoom, panX, panY);
-    ctx.clearRect(-panX / zoom, -panY / zoom, canvas.width / zoom, canvas.height / zoom);
-    ctx.drawImage(img, 0, 0);
-  };
-}
-
-document.getElementById('color').addEventListener('input', e => color = e.target.value);
-document.getElementById('size').addEventListener('input', e => size = e.target.value);
-
-document.getElementById('clear').addEventListener('click', () => {
   ctx.setTransform(zoom, 0, 0, zoom, panX, panY);
   ctx.clearRect(-panX / zoom, -panY / zoom, canvas.width / zoom, canvas.height / zoom);
-  saveState();
+  
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  for (let path of paths) {
+    ctx.strokeStyle = path.color;
+    ctx.lineWidth = path.size;
+    ctx.beginPath();
+    ctx.moveTo(path.points[0].x, path.points[0].y);
+    for (let p of path.points) {
+      ctx.lineTo(p.x, p.y);
+    }
+    ctx.stroke();
+  }
+}
+
+canvas.addEventListener('mousedown', e => {
+  if (e.button !== 0) return;
+  drawing = true;
+  lastX = (e.clientX - panX) / zoom;
+  lastY = (e.clientY - panY) / zoom;
+  currentPath = { color: "#000", size: 2, points: [{x: lastX, y: lastY}] };
 });
+canvas.addEventListener('mousemove', e => {
+  if (!drawing) return;
+  let x = (e.clientX - panX) / zoom;
+  let y = (e.clientY - panY) / zoom;
+  currentPath.points.push({x, y});
+  redraw();
+  paths.push(currentPath);
+});
+canvas.addEventListener('mouseup', e => {
+  if (drawing) {
+    drawing = false;
+    paths.push(currentPath);
+  }
+});
+
+// لمس وتحريك مع زوم بصباعين
+let touchStartDist = 0;
+canvas.addEventListener('touchstart', e => {
+  if (e.touches.length === 1) {
+    let touch = e.touches[0];
+    drawing = true;
+    lastX = (touch.clientX - panX) / zoom;
+    lastY = (touch.clientY - panY) / zoom;
+    currentPath = { color: "#000", size: 2, points: [{x: lastX, y: lastY}] };
+  } else if (e.touches.length === 2) {
+    drawing = false;
+    touchStartDist = Math.hypot(
+      e.touches[0].clientX - e.touches[1].clientX,
+      e.touches[0].clientY - e.touches[1].clientY
+    );
+  }
+});
+
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  if (e.touches.length === 1 && drawing) {
+    let touch = e.touches[0];
+    let x = (touch.clientX - panX) / zoom;
+    let y = (touch.clientY - panY) / zoom;
+    currentPath.points.push({x, y});
+    redraw();
+    paths.push(currentPath);
+  } else if (e.touches.length === 2) {
+    let newDist = Math.hypot(
+      e.touches[0].clientX - e.touches[1].clientX,
+      e.touches[0].clientY - e.touches[1].clientY
+    );
+    let scale = newDist / touchStartDist;
+    zoom *= scale;
+    zoom = Math.min(Math.max(zoom, zoomMin), zoomMax);
+    touchStartDist = newDist;
+    redraw();
+  }
+}, { passive: false });
+
+canvas.addEventListener('touchend', e => {
+  if (drawing) {
+    drawing = false;
+    paths.push(currentPath);
+  }
+});
+
+// حفظ JSON
 document.getElementById('save').addEventListener('click', () => {
-  const link = document.createElement('a');
-  link.download = 'drawing.png';
-  link.href = canvas.toDataURL();
-  link.click();
+  let blob = new Blob([JSON.stringify(paths)], {type: "application/json"});
+  let url = URL.createObjectURL(blob);
+  let a = document.createElement('a');
+  a.href = url;
+  a.download = "drawing.json";
+  a.click();
+  URL.revokeObjectURL(url);
 });
+
+// فتح JSON
 document.getElementById('open').addEventListener('click', () => {
-  const input = document.createElement('input');
+  let input = document.createElement('input');
   input.type = 'file';
-  input.accept = 'image/*';
+  input.accept = "application/json";
   input.onchange = e => {
-    const file = e.target.files[0];
-    const reader = new FileReader();
+    let file = e.target.files[0];
+    let reader = new FileReader();
     reader.onload = ev => {
-      const img = new Image();
-      img.onload = () => {
-        ctx.drawImage(img, 0, 0);
-        saveState();
-      };
-      img.src = ev.target.result;
+      paths = JSON.parse(ev.target.result);
+      redraw();
     };
-    reader.readAsDataURL(file);
+    reader.readAsText(file);
   };
   input.click();
 });
-document.getElementById('undo').addEventListener('click', () => {
-  if (historyStep > 0) {
-    historyStep--;
-    const img = new Image();
-    img.src = history[historyStep];
-    img.onload = () => {
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(img, 0, 0);
-    };
-  }
-});
-document.getElementById('redo').addEventListener('click', () => {
-  if (historyStep < history.length - 1) {
-    historyStep++;
-    const img = new Image();
-    img.src = history[historyStep];
-    img.onload = () => {
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(img, 0, 0);
-    };
-  }
-});
-document.getElementById('zoomIn').addEventListener('click', () => {
-  zoom *= 1.1;
-  zoom = Math.min(zoom, zoomMax);
-  document.getElementById('zoomInfo').innerText = `Zoom: ${(zoom * 100).toFixed(2)}%`;
-  redraw();
-});
-document.getElementById('zoomOut').addEventListener('click', () => {
-  zoom /= 1.1;
-  zoom = Math.max(zoom, zoomMin);
-  document.getElementById('zoomInfo').innerText = `Zoom: ${(zoom * 100).toFixed(2)}%`;
-  redraw();
-});
-document.getElementById('resetZoom').addEventListener('click', () => {
-  zoom = 1;
-  panX = 0;
-  panY = 0;
-  document.getElementById('zoomInfo').innerText = `Zoom: 100%`;
+
+// مسح
+document.getElementById('clear').addEventListener('click', () => {
+  paths = [];
   redraw();
 });
 </script>
