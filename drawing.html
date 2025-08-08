@@ -108,9 +108,9 @@
 
   function updateZoomInfo() {
     if (zoom < 0.0001 || zoom > 10000) {
-      zoomInfo.textContent = زوم: ${zoom.toExponential(2)}x;
+      zoomInfo.textContent = `زوم: ${zoom.toExponential(2)}x`;
     } else {
-      zoomInfo.textContent = زوم: ${zoom.toFixed(zoom >= 1 ? 2 : 8)}x;
+      zoomInfo.textContent = `زوم: ${zoom.toFixed(zoom >= 1 ? 2 : 8)}x`;
     }
   }
 
