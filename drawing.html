@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>تطبيق الرسم مع تأخير بعد الزوم</title>
+  <title>تطبيق الرسم المتقدم</title>
   <style>
     html, body {
       margin: 0;
@@ -47,20 +47,62 @@
     input[type="file"] {
       display: none;
     }
+    #toolsMenu {
+      display: none;
+      position: fixed;
+      top: 50px;
+      right: 10px;
+      background: #f0f0f0;
+      padding: 10px;
+      border-radius: 5px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+      z-index: 20;
+    }
+    #toolsMenu button {
+      display: block;
+      width: 100%;
+      margin: 5px 0;
+      font-size: 20px;
+      background: none;
+      border: none;
+      cursor: pointer;
+    }
+    .tool-btn {
+      font-size: 20px;
+      background: none;
+      border: none;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
 
 <div id="menu">
-  <label>🎨 اللون: <input type="color" id="colorPicker" value="#000000"></label>
-  <label>🖌️ الحجم: <input type="number" id="brushSize" min="1" max="100" value="3" step="1"></label>
-  <button id="undoBtn">↩️ تراجع</button>
-  <button id="redoBtn">↪️ إعادة</button>
-  <button id="clearBtn">🧹 مسح</button>
-  <button id="saveBtn">💾 حفظ صورة</button>
-  <button id="saveJsonBtn">📁 حفظ JSON</button>
-  <button id="loadJsonBtn">📂 فتح JSON</button>
+  <button class="tool-btn" id="toolsBtn">🛠️</button>
+  <input type="color" id="colorPicker" value="#000000">
+  <input type="number" id="brushSize" min="1" max="100" value="3" step="1">
+  <button class="tool-btn" id="undoBtn">↩️</button>
+  <button class="tool-btn" id="redoBtn">↪️</button>
+  <button class="tool-btn" id="clearBtn">🧹</button>
+  <button class="tool-btn" id="saveBtn">💾</button>
+  <button class="tool-btn" id="saveJsonBtn">📁</button>
+  <button class="tool-btn" id="loadJsonBtn">📂</button>
   <input type="file" id="jsonFileInput" accept=".json">
+</div>
+
+<div id="toolsMenu">
+  <button data-tool="pen">✏️ قلم</button>
+  <button data-tool="highlighter">🖍️ هايلايتر</button>
+  <button data-tool="pencil">📝 قلم رصاص</button>
+  <button data-tool="fountainPen">🖋️ قلم حبر</button>
+  <button data-tool="airbrush">🎨 رذاذ</button>
+  <button data-tool="eraser">🧼 ممحاة</button>
+  <button data-tool="softEraser">🧽 ممحاة ناعمة</button>
+  <button data-tool="blender">🌀 مزج</button>
+  <button data-tool="fill">🟦 تعبئة</button>
+  <button data-tool="glowpen">✨ قلم مضيء</button>
+  <button data-tool="pixelpen">🧊 قلم بيكسلي</button>
+  <button data-tool="line">📏 خط</button>
 </div>
 
 <canvas id="canvas"></canvas>
@@ -79,6 +121,8 @@
   const loadJsonBtn = document.getElementById("loadJsonBtn");
   const jsonFileInput = document.getElementById("jsonFileInput");
   const zoomInfo = document.getElementById("zoomInfo");
+  const toolsBtn = document.getElementById("toolsBtn");
+  const toolsMenu = document.getElementById("toolsMenu");
 
   // Initialize canvas
   let width = window.innerWidth;
@@ -94,6 +138,9 @@
   let hasMoved = false;
   let lastX = 0;
   let lastY = 0;
+  let currentTool = 'pen';
+  let startPoint = null;
+  let isDrawingLine = false;
 
   // Zoom state
   let zoom = 1;
@@ -103,7 +150,7 @@
   let lastTouchDist = 0;
   let zoomEndTime = 0;
   const ZOOM_COOLDOWN = 200;
-  const MIN_ZOOM = 1e-25; // 0.0000000000000000000000001
+  const MIN_ZOOM = 1e-25;
   const MAX_ZOOM = 1e25;
 
   function updateZoomInfo() {
@@ -120,18 +167,80 @@
     ctx.setTransform(zoom, 0, 0, zoom, panX, panY);
 
     for (let path of paths) {
+      applyToolSettings(path.tool);
       ctx.strokeStyle = path.color;
       ctx.lineWidth = path.size;
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
       ctx.beginPath();
-      for (let i = 0; i < path.points.length - 1; i++) {
-        ctx.moveTo(path.points[i].x, path.points[i].y);
-        ctx.lineTo(path.points[i + 1].x, path.points[i + 1].y);
+      
+      if (path.tool === 'line' && path.points.length === 2) {
+        ctx.moveTo(path.points[0].x, path.points[0].y);
+        ctx.lineTo(path.points[1].x, path.points[1].y);
+      } else {
+        for (let i = 0; i < path.points.length - 1; i++) {
+          ctx.moveTo(path.points[i].x, path.points[i].y);
+          ctx.lineTo(path.points[i + 1].x, path.points[i + 1].y);
+        }
       }
       ctx.stroke();
     }
+    
+    // Draw temporary line if in line mode
+    if (isDrawingLine && startPoint && currentPath && currentPath.points.length === 1) {
+      const endPoint = currentPath.points[0];
+      ctx.strokeStyle = currentPath.color;
+      ctx.lineWidth = currentPath.size;
+      ctx.beginPath();
+      ctx.moveTo(startPoint.x, startPoint.y);
+      ctx.lineTo(endPoint.x, endPoint.y);
+      ctx.stroke();
+    }
+    
     updateZoomInfo();
+  }
+
+  function applyToolSettings(tool) {
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    
+    switch(tool) {
+      case 'highlighter':
+        ctx.globalAlpha = 0.4;
+        break;
+      case 'pencil':
+        ctx.globalAlpha = 0.8;
+        ctx.lineWidth *= 0.7;
+        break;
+      case 'fountainPen':
+        ctx.lineWidth *= 1.2;
+        break;
+      case 'airbrush':
+        ctx.globalAlpha = 0.6;
+        break;
+      case 'eraser':
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.globalAlpha = 1.0;
+        break;
+      case 'softEraser':
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.globalAlpha = 0.3;
+        break;
+      case 'blender':
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = 0.5;
+        break;
+      case 'glowpen':
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = ctx.strokeStyle;
+        break;
+      case 'pixelpen':
+        ctx.lineCap = "square";
+        ctx.lineJoin = "miter";
+        break;
+      default:
+        ctx.globalAlpha = 1.0;
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.shadowBlur = 0;
+    }
   }
 
   function getCanvasPos(e) {
@@ -155,6 +264,18 @@
     drawAll();
   }
 
+  // Tools menu
+  toolsBtn.addEventListener("click", () => {
+    toolsMenu.style.display = toolsMenu.style.display === 'block' ? 'none' : 'block';
+  });
+
+  document.querySelectorAll('#toolsMenu button').forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      currentTool = e.target.dataset.tool;
+      toolsMenu.style.display = 'none';
+    });
+  });
+
   // Touch events
   canvas.addEventListener("touchstart", (e) => {
     e.preventDefault();
@@ -167,10 +288,17 @@
       const pos = getCanvasPos(e.touches[0]);
       lastX = pos.x;
       lastY = pos.y;
+      
+      if (currentTool === 'line') {
+        startPoint = pos;
+        isDrawingLine = true;
+      }
+      
       currentPath = {
+        tool: currentTool,
         color: colorPicker.value,
         size: parseFloat(brushSize.value),
-        points: []
+        points: [pos]
       };
       drawing = true;
       hasMoved = false;
@@ -201,24 +329,23 @@
       const dy = pos.y - lastY;
       const dist = Math.sqrt(dx * dx + dy * dy);
       
-      if (dist > 0.5) {
+      if (currentTool === 'line') {
+        if (currentPath.points.length > 1) {
+          currentPath.points.pop();
+        }
+        currentPath.points.push(pos);
+      } 
+      else if (dist > 0.5) {
         if (!hasMoved) {
           currentPath.points.push({x: lastX, y: lastY});
           hasMoved = true;
         }
         currentPath.points.push(pos);
-        
-        ctx.strokeStyle = currentPath.color;
-        ctx.lineWidth = currentPath.size;
-        ctx.lineCap = "round";
-        ctx.beginPath();
-        ctx.moveTo(lastX, lastY);
-        ctx.lineTo(pos.x, pos.y);
-        ctx.stroke();
-        
-        lastX = pos.x;
-        lastY = pos.y;
       }
+      
+      lastX = pos.x;
+      lastY = pos.y;
+      drawAll();
     }
   });
 
@@ -228,13 +355,21 @@
       zoomEndTime = Date.now();
     }
     
-    if (drawing && hasMoved && currentPath.points.length > 1) {
-      paths.push(currentPath);
-      undonePaths = [];
+    if (drawing) {
+      if (currentTool === 'line' && currentPath.points.length === 2) {
+        paths.push(currentPath);
+        undonePaths = [];
+      } 
+      else if (hasMoved && currentPath.points.length > 1) {
+        paths.push(currentPath);
+        undonePaths = [];
+      }
+      
+      drawing = false;
+      isDrawingLine = false;
+      currentPath = null;
+      hasMoved = false;
     }
-    drawing = false;
-    currentPath = null;
-    hasMoved = false;
   });
 
   // Mouse events (for desktop)
@@ -243,10 +378,17 @@
       const pos = getCanvasPos(e);
       lastX = pos.x;
       lastY = pos.y;
+      
+      if (currentTool === 'line') {
+        startPoint = pos;
+        isDrawingLine = true;
+      }
+      
       currentPath = {
+        tool: currentTool,
         color: colorPicker.value,
         size: parseFloat(brushSize.value),
-        points: []
+        points: [pos]
       };
       drawing = true;
       hasMoved = false;
@@ -261,45 +403,60 @@
       const dy = pos.y - lastY;
       const dist = Math.sqrt(dx * dx + dy * dy);
       
-      if (dist > 0.5) {
+      if (currentTool === 'line') {
+        if (currentPath.points.length > 1) {
+          currentPath.points.pop();
+        }
+        currentPath.points.push(pos);
+      } 
+      else if (dist > 0.5) {
         if (!hasMoved) {
           currentPath.points.push({x: lastX, y: lastY});
           hasMoved = true;
         }
         currentPath.points.push(pos);
-        
-        ctx.strokeStyle = currentPath.color;
-        ctx.lineWidth = currentPath.size;
-        ctx.lineCap = "round";
-        ctx.beginPath();
-        ctx.moveTo(lastX, lastY);
-        ctx.lineTo(pos.x, pos.y);
-        ctx.stroke();
-        
-        lastX = pos.x;
-        lastY = pos.y;
       }
+      
+      lastX = pos.x;
+      lastY = pos.y;
+      drawAll();
     }
   });
 
   canvas.addEventListener("mouseup", () => {
-    if (drawing && hasMoved && currentPath.points.length > 1) {
-      paths.push(currentPath);
-      undonePaths = [];
+    if (drawing) {
+      if (currentTool === 'line' && currentPath.points.length === 2) {
+        paths.push(currentPath);
+        undonePaths = [];
+      } 
+      else if (hasMoved && currentPath.points.length > 1) {
+        paths.push(currentPath);
+        undonePaths = [];
+      }
+      
+      drawing = false;
+      isDrawingLine = false;
+      currentPath = null;
+      hasMoved = false;
     }
-    drawing = false;
-    currentPath = null;
-    hasMoved = false;
   });
 
   canvas.addEventListener("mouseleave", () => {
-    if (drawing && hasMoved && currentPath.points.length > 1) {
-      paths.push(currentPath);
-      undonePaths = [];
+    if (drawing) {
+      if (currentTool === 'line' && currentPath.points.length === 2) {
+        paths.push(currentPath);
+        undonePaths = [];
+      } 
+      else if (hasMoved && currentPath.points.length > 1) {
+        paths.push(currentPath);
+        undonePaths = [];
+      }
+      
+      drawing = false;
+      isDrawingLine = false;
+      currentPath = null;
+      hasMoved = false;
     }
-    drawing = false;
-    currentPath = null;
-    hasMoved = false;
   });
 
   // Button handlers
