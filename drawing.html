@@ -90,18 +90,14 @@
 </div>
 
 <div id="toolsMenu">
-  <button data-tool="pen">✏️ قلم</button>
-  <button data-tool="highlighter">🖍️ هايلايتر</button>
+  <button data-tool="pen">✏️ قلم عادي</button>
+  <button data-tool="highlighter">🖍️ ماركر فسفوري</button>
   <button data-tool="pencil">📝 قلم رصاص</button>
   <button data-tool="fountainPen">🖋️ قلم حبر</button>
-  <button data-tool="airbrush">🎨 رذاذ</button>
-  <button data-tool="eraser">🧼 ممحاة</button>
+  <button data-tool="airbrush">🎨 رشاش</button>
+  <button data-tool="eraser">🧼 ممحاة عادية</button>
   <button data-tool="softEraser">🧽 ممحاة ناعمة</button>
-  <button data-tool="blender">🌀 مزج</button>
-  <button data-tool="fill">🟦 تعبئة</button>
-  <button data-tool="glowpen">✨ قلم مضيء</button>
-  <button data-tool="pixelpen">🧊 قلم بيكسلي</button>
-  <button data-tool="line">📏 خط</button>
+  <button data-tool="blender">🌀 أداة دمج</button>
 </div>
 
 <canvas id="canvas"></canvas>
@@ -109,7 +105,7 @@
 
 <script>
   const canvas = document.getElementById("canvas");
-  const ctx = canvas.getContext("2d");
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
   const colorPicker = document.getElementById("colorPicker");
   const brushSize = document.getElementById("brushSize");
   const undoBtn = document.getElementById("undoBtn");
@@ -138,6 +134,11 @@
   let lastX = 0;
   let lastY = 0;
   let currentTool = 'pen';
+  let lastTime = 0;
+  let tempCanvas = document.createElement('canvas');
+  let tempCtx = tempCanvas.getContext('2d');
+  tempCanvas.width = width;
+  tempCanvas.height = height;
 
   // Zoom state
   let zoom = 1;
@@ -149,6 +150,66 @@
   const ZOOM_COOLDOWN = 200;
   const MIN_ZOOM = 1e-25;
   const MAX_ZOOM = 1e25;
+
+  // Tool settings
+  const toolSettings = {
+    pen: {
+      opacity: 1.0,
+      composite: 'source-over',
+      lineCap: 'round',
+      lineJoin: 'round',
+      shadow: false
+    },
+    highlighter: {
+      opacity: 0.4,
+      composite: 'multiply',
+      lineCap: 'round',
+      lineJoin: 'round',
+      shadow: false
+    },
+    pencil: {
+      opacity: 0.7,
+      composite: 'source-over',
+      lineCap: 'round',
+      lineJoin: 'round',
+      shadow: false
+    },
+    fountainPen: {
+      opacity: 1.0,
+      composite: 'source-over',
+      lineCap: 'round',
+      lineJoin: 'miter',
+      shadow: false
+    },
+    airbrush: {
+      opacity: 0.5,
+      composite: 'source-over',
+      lineCap: 'round',
+      lineJoin: 'round',
+      shadow: false
+    },
+    eraser: {
+      opacity: 1.0,
+      composite: 'destination-out',
+      lineCap: 'round',
+      lineJoin: 'round',
+      shadow: false
+    },
+    softEraser: {
+      opacity: 0.3,
+      composite: 'destination-out',
+      lineCap: 'round',
+      lineJoin: 'round',
+      shadow: false
+    },
+    blender: {
+      opacity: 0.8,
+      composite: 'lighter',
+      lineCap: 'round',
+      lineJoin: 'round',
+      shadow: false
+    }
+  };
 
   function updateZoomInfo() {
     if (zoom < 0.0001 || zoom > 10000) {
@@ -163,29 +224,126 @@
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.setTransform(zoom, 0, 0, zoom, panX, panY);
 
+    // Draw all paths
     for (let path of paths) {
-      ctx.strokeStyle = path.color;
-      ctx.lineWidth = path.size;
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
-      ctx.globalAlpha = 1.0;
-      ctx.globalCompositeOperation = 'source-over';
+      drawPath(path);
+    }
+
+    // Draw current path if exists
+    if (currentPath && currentPath.points.length > 1) {
+      drawPath(currentPath);
+    }
+
+    updateZoomInfo();
+  }
+
+  function drawPath(path) {
+    const settings = toolSettings[path.tool];
+    
+    ctx.globalAlpha = settings.opacity;
+    ctx.globalCompositeOperation = settings.composite;
+    ctx.lineCap = settings.lineCap;
+    ctx.lineJoin = settings.lineJoin;
+    ctx.strokeStyle = path.color;
+    ctx.fillStyle = path.color;
+    ctx.lineWidth = path.size;
+    
+    if (settings.shadow) {
+      ctx.shadowBlur = path.size / 2;
+      ctx.shadowColor = path.color;
+    } else {
+      ctx.shadowBlur = 0;
+    }
+
+    // Special tools handling
+    if (path.tool === 'airbrush') {
+      drawAirbrush(path);
+    } else if (path.tool === 'blender') {
+      drawBlender(path);
+    } else {
+      // Normal drawing for other tools
+      ctx.beginPath();
+      ctx.moveTo(path.points[0].x, path.points[0].y);
       
-      if (path.tool === 'line' && path.points.length === 2) {
-        ctx.beginPath();
-        ctx.moveTo(path.points[0].x, path.points[0].y);
-        ctx.lineTo(path.points[1].x, path.points[1].y);
-        ctx.stroke();
-      } else {
-        ctx.beginPath();
-        for (let i = 0; i < path.points.length - 1; i++) {
-          ctx.moveTo(path.points[i].x, path.points[i].y);
-          ctx.lineTo(path.points[i + 1].x, path.points[i + 1].y);
+      for (let i = 1; i < path.points.length; i++) {
+        const point = path.points[i];
+        
+        // For fountain pen - variable width based on angle
+        if (path.tool === 'fountainPen' && i > 0) {
+          const prevPoint = path.points[i-1];
+          const angle = Math.atan2(point.y - prevPoint.y, point.x - prevPoint.x);
+          ctx.lineWidth = path.size * (0.3 + Math.abs(Math.cos(angle)) * 0.7;
         }
+        
+        ctx.lineTo(point.x, point.y);
         ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(point.x, point.y);
       }
     }
-    updateZoomInfo();
+    
+    // Reset context settings
+    ctx.globalAlpha = 1.0;
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.shadowBlur = 0;
+  }
+
+  function drawAirbrush(path) {
+    const density = path.size * 2;
+    const radius = path.size / 2;
+    
+    for (let i = 1; i < path.points.length; i++) {
+      const point = path.points[i];
+      const prevPoint = path.points[i-1] || point;
+      
+      const dist = Math.hypot(point.x - prevPoint.x, point.y - prevPoint.y);
+      const steps = Math.max(1, Math.floor(dist * density / 10));
+      
+      for (let j = 0; j <= steps; j++) {
+        const t = j / steps;
+        const x = prevPoint.x + t * (point.x - prevPoint.x);
+        const y = prevPoint.y + t * (point.y - prevPoint.y);
+        
+        const particles = Math.floor(path.size / 3);
+        for (let p = 0; p < particles; p++) {
+          const angle = Math.random() * Math.PI * 2;
+          const r = Math.random() * radius;
+          const px = x + Math.cos(angle) * r;
+          const py = y + Math.sin(angle) * r;
+          
+          ctx.globalAlpha = Math.random() * 0.5 * toolSettings.airbrush.opacity;
+          ctx.beginPath();
+          ctx.arc(px, py, 0.5 + Math.random(), 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+  }
+
+  function drawBlender(path) {
+    // Simple blending effect - would need more advanced algorithm for better blending
+    ctx.globalAlpha = toolSettings.blender.opacity;
+    
+    for (let i = 1; i < path.points.length; i++) {
+      const point = path.points[i];
+      const prevPoint = path.points[i-1];
+      
+      const gradient = ctx.createLinearGradient(
+        prevPoint.x, prevPoint.y,
+        point.x, point.y
+      );
+      
+      gradient.addColorStop(0, 'rgba(255,255,255,0.5)');
+      gradient.addColorStop(1, path.color);
+      
+      ctx.strokeStyle = gradient;
+      ctx.lineWidth = path.size * 1.5;
+      
+      ctx.beginPath();
+      ctx.moveTo(prevPoint.x, prevPoint.y);
+      ctx.lineTo(point.x, point.y);
+      ctx.stroke();
+    }
   }
 
   function getCanvasPos(e) {
@@ -210,19 +368,25 @@
   }
 
   // Tools menu
-  toolsBtn.addEventListener("click", () => {
+  toolsBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
     toolsMenu.style.display = toolsMenu.style.display === 'block' ? 'none' : 'block';
   });
 
-  document.querySelectorAll('#toolsMenu button').forEach(btn => {
+  document.querySelectorAll('#toolsMenu [data-tool]').forEach(btn => {
     btn.addEventListener("click", (e) => {
-      currentTool = e.target.dataset.tool;
+      currentTool = e.currentTarget.dataset.tool;
       toolsMenu.style.display = 'none';
     });
   });
 
   // Touch events
   canvas.addEventListener("touchstart", (e) => {
+    if (toolsMenu.style.display === 'block') {
+      toolsMenu.style.display = 'none';
+      return;
+    }
+    
     e.preventDefault();
     
     if (e.touches.length === 2) {
@@ -233,14 +397,16 @@
       const pos = getCanvasPos(e.touches[0]);
       lastX = pos.x;
       lastY = pos.y;
+      
       currentPath = {
         tool: currentTool,
-        color: colorPicker.value,
+        color: currentTool === 'eraser' || currentTool === 'softEraser' ? '#ffffff' : colorPicker.value,
         size: parseFloat(brushSize.value),
         points: [pos]
       };
       drawing = true;
       hasMoved = false;
+      lastTime = Date.now();
     }
   });
 
@@ -273,18 +439,24 @@
           currentPath.points.push({x: lastX, y: lastY});
           hasMoved = true;
         }
-        currentPath.points.push(pos);
         
-        ctx.strokeStyle = currentPath.color;
-        ctx.lineWidth = currentPath.size;
-        ctx.lineCap = "round";
-        ctx.beginPath();
-        ctx.moveTo(lastX, lastY);
-        ctx.lineTo(pos.x, pos.y);
-        ctx.stroke();
+        // Add pressure sensitivity for supported tools
+        const now = Date.now();
+        const pressure = touch.force || 0.5;
+        const adjustedSize = currentPath.size * 
+          (toolSettings[currentTool].pressure ? (0.5 + pressure * 0.5) : 1);
+        
+        currentPath.points.push({
+          x: pos.x,
+          y: pos.y,
+          size: adjustedSize,
+          time: now
+        });
         
         lastX = pos.x;
         lastY = pos.y;
+        lastTime = now;
+        drawAll();
       }
     }
   });
@@ -306,18 +478,25 @@
 
   // Mouse events (for desktop)
   canvas.addEventListener("mousedown", (e) => {
+    if (toolsMenu.style.display === 'block') {
+      toolsMenu.style.display = 'none';
+      return;
+    }
+    
     if (Date.now() - zoomEndTime > ZOOM_COOLDOWN) {
       const pos = getCanvasPos(e);
       lastX = pos.x;
       lastY = pos.y;
+      
       currentPath = {
         tool: currentTool,
-        color: colorPicker.value,
+        color: currentTool === 'eraser' || currentTool === 'softEraser' ? '#ffffff' : colorPicker.value,
         size: parseFloat(brushSize.value),
         points: [pos]
       };
       drawing = true;
       hasMoved = false;
+      lastTime = Date.now();
     }
   });
 
@@ -334,18 +513,25 @@
           currentPath.points.push({x: lastX, y: lastY});
           hasMoved = true;
         }
-        currentPath.points.push(pos);
         
-        ctx.strokeStyle = currentPath.color;
-        ctx.lineWidth = currentPath.size;
-        ctx.lineCap = "round";
-        ctx.beginPath();
-        ctx.moveTo(lastX, lastY);
-        ctx.lineTo(pos.x, pos.y);
-        ctx.stroke();
+        // Simulate pressure for mouse (based on speed)
+        const now = Date.now();
+        const speed = dist / (now - lastTime);
+        const pressure = Math.min(1, 1 / (speed + 0.1));
+        const adjustedSize = currentPath.size * 
+          (toolSettings[currentTool].pressure ? pressure : 1);
+        
+        currentPath.points.push({
+          x: pos.x,
+          y: pos.y,
+          size: adjustedSize,
+          time: now
+        });
         
         lastX = pos.x;
         lastY = pos.y;
+        lastTime = now;
+        drawAll();
       }
     }
   });
@@ -451,6 +637,8 @@
     height = window.innerHeight - 50;
     canvas.width = width;
     canvas.height = height;
+    tempCanvas.width = width;
+    tempCanvas.height = height;
     drawAll();
   });
 
