@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>تطبيق الرسم مع أدوات متعددة وزوم متقدم</title>
+  <title>تطبيق الرسم مع تأخير بعد الزوم وأدوات متقدمة</title>
   <style>
     html, body {
       margin: 0; padding: 0; overflow: hidden; touch-action: none; font-family: sans-serif;
@@ -23,6 +23,9 @@
       cursor: pointer;
       font-size: 24px;
       user-select: none;
+      background: none;
+      border: none;
+      padding: 0 8px;
     }
     #toolsPopup {
       display: none;
@@ -97,7 +100,7 @@
 </div>
 
 <div id="toolsPopup" aria-label="أدوات الرسم">
-  <!-- أزرار الأدوات تظهر هنا بالسكربت -->
+  <!-- أزرار الأدوات تظهر هنا -->
 </div>
 
 <canvas id="canvas"></canvas>
@@ -157,11 +160,15 @@
   let panY = 0;
   let isZooming = false;
   let lastTouchDist = 0;
-  const MIN_ZOOM = 0.1;
-  const MAX_ZOOM = 20;
+  const MIN_ZOOM = 1e-25; // كما في الكود الثاني
+  const MAX_ZOOM = 1e25;
 
-  // أداة محددة افتراضية
-  let currentTool = "brush";
+  let lastX = 0;
+  let lastY = 0;
+
+  // تأخير بعد الزوم (delay)
+  let zoomEndTime = 0;
+  const ZOOM_COOLDOWN = 200; // 200 ملي ثانية كما في الكود الثاني
 
   // تحديث نص الزوم
   function updateZoomInfo() {
@@ -352,99 +359,130 @@
     drawAll();
   }
 
-  // بدء رسم مسار جديد
-  function startPath(pos) {
+  // بدء الرسم
+  function startDrawing(x, y) {
+    if(Date.now() - zoomEndTime < ZOOM_COOLDOWN) return; // تأخير بعد الزوم
+
+    const pos = screenToCanvas(x, y);
     currentPath = {
+      tool: currentTool,
       color: colorPicker.value,
       size: parseFloat(brushSize.value),
       points: [],
-      tool: currentTool
+      start: pos
     };
-    if(currentTool === "line") {
-      currentPath.start = pos;
-      currentPath.points.push(pos);
-      currentPath.points.push(pos);
-    } else if(currentTool === "fill") {
-      // تعبئة لاحقاً
-    } else {
-      currentPath.points.push(pos);
+    lastX = pos.x;
+    lastY = pos.y;
+    drawing = true;
+    hasMoved = false;
+
+    // تعبئة إذا كانت أداة fill
+    if(currentTool === "fill") {
+      floodFill(pos.x, pos.y, currentPath.color);
+      drawing = false;
+      currentPath = null;
     }
   }
 
-  // حالة رسم
-  let lastX = 0;
-  let lastY = 0;
-  let drawing = false;
-  let hasMoved = false;
-  let zoomEndTime = 0;
-  const ZOOM_COOLDOWN = 200;
-
-  // بدء الرسم (لمس أو ماوس)
-  function startDrawing(x, y) {
-    if(Date.now() - zoomEndTime < ZOOM_COOLDOWN) return;
-    const pos = screenToCanvas(x, y);
-    lastX = pos.x;
-    lastY = pos.y;
-    startPath(pos);
-    drawing = true;
-    hasMoved = false;
-  }
-
-  // تحريك الرسم (لمس أو ماوس)
+  // تحريك الرسم أثناء اللمس/المسح
   function moveDrawing(x, y) {
     if(!drawing) return;
     const pos = screenToCanvas(x, y);
+    const dx = pos.x - lastX;
+    const dy = pos.y - lastY;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    if(dist < 0.5) return;
 
     if(currentTool === "line") {
-      currentPath.points[1] = pos;
-      drawAll();
-      ctx.setTransform(zoom, 0, 0, zoom, panX, panY);
-      ctx.strokeStyle = currentPath.color;
-      ctx.lineWidth = currentPath.size;
-      ctx.lineCap = "round";
-      ctx.beginPath();
-      ctx.moveTo(currentPath.start.x, currentPath.start.y);
-      ctx.lineTo(pos.x, pos.y);
-      ctx.stroke();
-    } else if(currentTool === "fill") {
-      // لا شيء أثناء الحركة
+      // للرسم خط مستقيم، نحدث نقطة النهاية فقط
+      if(currentPath.points.length === 0) currentPath.points.push(pos);
+      else currentPath.points[0] = pos; 
     } else {
-      const last = currentPath.points[currentPath.points.length - 1];
-      const dx = pos.x - last.x;
-      const dy = pos.y - last.y;
-      const dist = Math.sqrt(dx*dx + dy*dy);
-      if(dist > 0.5) {
-        currentPath.points.push(pos);
-        ctx.setTransform(zoom, 0, 0, zoom, panX, panY);
-        drawPathSegment(last.x, last.y, pos);
-        lastX = pos.x;
-        lastY = pos.y;
+      if(!hasMoved) {
+        currentPath.points.push({x: lastX, y: lastY});
         hasMoved = true;
       }
+      currentPath.points.push(pos);
+      drawPathSegment(lastX, lastY, pos);
     }
+
+    lastX = pos.x;
+    lastY = pos.y;
   }
 
-  // إنهاء الرسم (لمس أو ماوس)
+  // إنهاء الرسم (إضافة المسار)
   function endDrawing() {
-    if(drawing) {
-      if(hasMoved || currentTool === "line") {
-        paths.push(currentPath);
-        undonePaths = [];
-      }
-    }
+    if(!drawing) return;
     drawing = false;
+
+    // مسار خط مستقيم نضيف بداية ونهاية فقط
+    if(currentTool === "line" && currentPath.points.length === 1) {
+      currentPath.points.push(currentPath.points[0]);
+    }
+
+    if(currentPath.points.length > 0) {
+      paths.push(currentPath);
+      undonePaths = [];
+    }
     currentPath = null;
-    hasMoved = false;
     drawAll();
   }
 
-  // الأحداث اللمسية (لمس)
+  // تنفيذ تعبئة flood fill (ببساطة باستخدام خوارزمية BFS أو DFS على بكسلات)
+  // هنا مثال مبسط، يمكن تحسينه حسب الأداء
+  function floodFill(startX, startY, fillColor) {
+    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const targetColor = getPixelColor(imgData, Math.floor(startX * zoom + panX), Math.floor(startY * zoom + panY));
+    const fillRgb = hexToRgb(fillColor);
+    if(colorsMatch(targetColor, fillRgb)) return;
+
+    const stack = [{x: Math.floor(startX * zoom + panX), y: Math.floor(startY * zoom + panY)}];
+
+    while(stack.length > 0) {
+      const {x, y} = stack.pop();
+      const currentColor = getPixelColor(imgData, x, y);
+      if(!colorsMatch(currentColor, targetColor)) continue;
+
+      setPixelColor(imgData, x, y, fillRgb);
+
+      if(x > 0) stack.push({x: x-1, y: y});
+      if(x < imgData.width-1) stack.push({x: x+1, y: y});
+      if(y > 0) stack.push({x: x, y: y-1});
+      if(y < imgData.height-1) stack.push({x: x, y: y+1});
+    }
+
+    ctx.putImageData(imgData, 0, 0);
+  }
+
+  // ألوان البكسل
+  function getPixelColor(imgData, x, y) {
+    const index = (y * imgData.width + x) * 4;
+    return {
+      r: imgData.data[index],
+      g: imgData.data[index + 1],
+      b: imgData.data[index + 2],
+      a: imgData.data[index + 3]
+    };
+  }
+  function setPixelColor(imgData, x, y, color) {
+    const index = (y * imgData.width + x) * 4;
+    imgData.data[index] = color.r;
+    imgData.data[index + 1] = color.g;
+    imgData.data[index + 2] = color.b;
+    imgData.data[index + 3] = 255;
+  }
+  function colorsMatch(c1, c2) {
+    return c1.r === c2.r && c1.g === c2.g && c1.b === c2.b && c1.a !== 0;
+  }
+
+  // الأحداث اللمسية
   canvas.addEventListener("touchstart", e => {
     e.preventDefault();
     if(e.touches.length === 2) {
       isZooming = true;
       lastTouchDist = distance(e.touches[0], e.touches[1]);
-    } else if(e.touches.length === 1 && !isZooming) {
+    } else if(e.touches.length === 1 && !isZooming && Date.now() - zoomEndTime > ZOOM_COOLDOWN) {
+      const pos = screenToCanvas(e.touches[0].clientX, e.touches[0].clientY);
       startDrawing(e.touches[0].clientX, e.touches[0].clientY);
     }
   }, {passive:false});
@@ -473,16 +511,14 @@
     endDrawing();
   });
 
-  // الأحداث بالفأرة (ديسكتوب)
+  // أحداث الماوس
   canvas.addEventListener("mousedown", e => {
-    if(e.button !== 0) return; // زر الفأرة الأيسر فقط
+    if(e.button !== 0) return;
     startDrawing(e.clientX, e.clientY);
   });
-
   canvas.addEventListener("mousemove", e => {
     moveDrawing(e.clientX, e.clientY);
   });
-
   canvas.addEventListener("mouseup", e => {
     endDrawing();
   });
@@ -491,7 +527,6 @@
   });
 
   // أزرار التحكم
-
   clearBtn.addEventListener("click", () => {
     paths = [];
     undonePaths = [];
@@ -500,28 +535,24 @@
     panY = 0;
     drawAll();
   });
-
   undoBtn.addEventListener("click", () => {
     if(paths.length > 0) {
       undonePaths.push(paths.pop());
       drawAll();
     }
   });
-
   redoBtn.addEventListener("click", () => {
     if(undonePaths.length > 0) {
       paths.push(undonePaths.pop());
       drawAll();
     }
   });
-
   saveBtn.addEventListener("click", () => {
     const link = document.createElement('a');
     link.download = 'drawing.png';
     link.href = canvas.toDataURL();
     link.click();
   });
-
   saveJsonBtn.addEventListener("click", () => {
     const data = {paths, zoom, panX, panY};
     const json = JSON.stringify(data);
@@ -533,11 +564,9 @@
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 100);
   });
-
   loadJsonBtn.addEventListener("click", () => {
     jsonFileInput.click();
   });
-
   jsonFileInput.addEventListener("change", e => {
     const file = e.target.files[0];
     if(!file) return;
@@ -559,7 +588,8 @@
     jsonFileInput.value = '';
   });
 
-  // تغيير أداة الرسم عند الضغط على زر في القائمة
+  // التبديل بين الأدوات
+  let currentTool = "brush";
   toolsPopup.addEventListener("click", e => {
     if(e.target.tagName === "BUTTON") {
       currentTool = e.target.dataset.tool;
@@ -578,20 +608,20 @@
     }
   });
 
-  // تعيين أداة افتراضية محددة ظاهريًا
+  // تعيين الأداة الافتراضية ظاهرياً
   function selectDefaultTool() {
     const defaultBtn = Array.from(toolsPopup.children).find(b => b.dataset.tool === currentTool);
     if(defaultBtn) defaultBtn.classList.add("selected");
   }
   selectDefaultTool();
 
-  // إعادة ضبط الحجم عند تغير حجم النافذة
+  // تحديث الحجم عند تغيير النافذة
   window.addEventListener("resize", () => {
     resizeCanvas();
     drawAll();
   });
 
-  // الرسم الأولي
+  // الرسم الابتدائي
   drawAll();
 </script>
 
