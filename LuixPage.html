@@ -11,41 +11,48 @@
       background: #fff;
       display: flex;
       justify-content: center;
-      align-items: flex-start;
+      align-items: center;
       min-height: 100vh;
     }
 
     .container {
       border: 3px solid magenta;
-      border-radius: 10px;
+      border-radius: 12px;
       width: 90%;
-      max-width: 400px; /* للبيسي */
-      margin: 20px auto;
+      max-width: 400px;
+      padding: 20px;
+      text-align: center;
       box-sizing: border-box;
-      padding: 10px;
     }
 
-    .navbar {
-      display: flex;
-      align-items: center;
-      gap: 15px;
-      margin-bottom: 10px;
+    .logo {
+      width: 120px;
+      height: auto;
+      margin-bottom: 15px;
     }
 
-    .navbar img {
-      height: 40px;
-      width: auto;
+    .welcome {
+      font-size: 18px;
+      margin: 10px 0 20px;
+      color: #333;
+      line-height: 1.6;
     }
 
-    .navbar a {
+    .btn {
+      display: block;
+      width: 100%;
+      padding: 12px;
+      margin: 10px 0;
+      background: magenta;
+      color: white;
       text-decoration: none;
-      color: magenta;
-      font-weight: bold;
       font-size: 16px;
+      border-radius: 8px;
+      transition: 0.3s;
     }
 
-    .navbar a:hover {
-      text-decoration: underline;
+    .btn:hover {
+      background: deeppink;
     }
 
     @media (max-width: 600px) {
@@ -54,25 +61,32 @@
         border-width: 2px;
       }
 
-      .navbar {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 5px;
+      .welcome {
+        font-size: 16px;
       }
 
-      .navbar img {
-        height: 35px;
+      .btn {
+        font-size: 14px;
+        padding: 10px;
       }
     }
   </style>
 </head>
 <body>
   <div class="container">
-    <div class="navbar">
-      <img src="Luix Logo.svg" alt="Luix Logo">
-      <a href="#">Home.</a>
-      <a href="https://shenoxdev.github.io/Endless-Drawings-1.0/drawing.html" target="_blank">Endless Drawing.</a>
+    <!-- اللوجو -->
+    <img src="Luix Logo.svg" alt="Luix Logo" class="logo">
+
+    <!-- الكلام الترحيبي -->
+    <div class="welcome">
+      🌟 Welcome to <b>Luix</b> Lobby 🌟<br>
+      Endless Drawing Beta is here!<br>
+      Enjoy your creative journey ✨
     </div>
+
+    <!-- الأزرار -->
+    <a href="#" class="btn">Home</a>
+    <a href="https://shenoxdev.github.io/Endless-Drawings-1.0/drawing.html" target="_blank" class="btn">Endless Drawing</a>
   </div>
 </body>
 </html>
