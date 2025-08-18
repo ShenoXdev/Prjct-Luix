@@ -70,6 +70,12 @@
             color: white;
             transform: translateY(-2px);
         }
+        
+        #export-mp4 {
+            background-color: #e74c3c;
+            color: white;
+            font-weight: bold;
+        }
 
         .controls-group {
             display: flex;
@@ -186,7 +192,7 @@
                     <button id="export-json">تصدير JSON</button>
                     <input type="file" id="import-json" accept=".json" style="display: none;">
                     <label for="import-json" class="sidebar-button" style="cursor: pointer; padding: 10px; border: 1px solid var(--border-color); border-radius: 5px; background-color: var(--bg-color); color: var(--secondary-color); text-align: center;">استيراد JSON</label>
-                    <button id="export-png-sequence">تصدير تسلسل صور PNG</button>
+                    <button id="export-mp4">تصدير MP4</button>
                 </div>
             </div>
 
@@ -219,6 +225,7 @@
         </div>
     </footer>
 
+    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.9.7/dist/ffmpeg.min.js"></script>
     <script>
         const canvas = document.getElementById('animationCanvas');
         const ctx = canvas.getContext('2d');
@@ -248,6 +255,16 @@
             x: 0,
             y: 0
         };
+
+        const { createWorker } = FFmpeg;
+        const worker = createWorker({
+            corePath: 'https://unpkg.com/@ffmpeg/core@0.9.1/dist/ffmpeg-core.js'
+        });
+        
+        async function loadFFmpeg() {
+            await worker.load();
+        }
+        loadFFmpeg();
 
         function getTransformedPoint(clientX, clientY) {
             const rect = canvas.getBoundingClientRect();
@@ -740,30 +757,31 @@
             };
             reader.readAsText(file);
         });
-
-        document.getElementById('export-png-sequence').addEventListener('click', () => {
-            exportPngSequence();
+        
+        document.getElementById('export-mp4').addEventListener('click', async () => {
+            await exportMP4();
         });
 
-        function exportPngSequence() {
-            const zip = new JSZip();
-            const originalFrame = currentFrame;
+        async function exportMP4() {
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = canvas.width;
+            tempCanvas.height = canvas.height;
+            const tempCtx = tempCanvas.getContext('2d');
+            
+            const originalTransform = JSON.parse(JSON.stringify(transform));
+            transform = { scale: 1, x: 0, y: 0 };
+            
+            const frameCount = animationData.length;
+            const frameRate = 12; // Adjust as needed
+            const promises = [];
 
-            const exportPromises = animationData.map((frame, index) => {
-                return new Promise(resolve => {
-                    const tempCanvas = document.createElement('canvas');
-                    tempCanvas.width = canvas.width;
-                    tempCanvas.height = canvas.height;
-                    const tempCtx = tempCanvas.getContext('2d');
-                    
-                    const originalTransform = JSON.parse(JSON.stringify(transform));
-                    transform = { scale: 1, x: 0, y: 0 };
-                    
+            for (let i = 0; i < frameCount; i++) {
+                promises.push(new Promise(resolve => {
                     tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
                     tempCtx.fillStyle = 'white';
                     tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
                     
-                    frame.layers.forEach(layer => {
+                    animationData[i].layers.forEach(layer => {
                         layer.forEach(shape => {
                             if (shape) {
                                 tempCtx.save();
@@ -779,8 +797,8 @@
                                     tempCtx.beginPath();
                                     if (shape.points.length > 1) {
                                         tempCtx.moveTo(shape.points[0].x - shapeX, shape.points[0].y - shapeY);
-                                        for (let i = 1; i < shape.points.length; i++) {
-                                            tempCtx.lineTo(shape.points[i].x - shapeX, shape.points[i].y - shapeY);
+                                        for (let j = 1; j < shape.points.length; j++) {
+                                            tempCtx.lineTo(shape.points[j].x - shapeX, shape.points[j].y - shapeY);
                                         }
                                     }
                                     tempCtx.stroke();
@@ -798,29 +816,41 @@
                             }
                         });
                     });
-
-                    tempCanvas.toBlob(blob => {
-                        zip.file(`frame_${String(index).padStart(4, '0')}.png`, blob);
-                        transform = originalTransform;
-                        resolve();
-                    }, 'image/png');
-                });
-            });
-
-            Promise.all(exportPromises).then(() => {
-                zip.generateAsync({ type: "blob" }).then(content => {
-                    const downloadLink = document.createElement('a');
-                    downloadLink.href = URL.createObjectURL(content);
-                    downloadLink.download = 'animation_frames.zip';
-                    document.body.appendChild(downloadLink);
-                    downloadLink.click();
-                    document.body.removeChild(downloadLink);
                     
-                    redrawCanvas(); // Restore the original view
-                });
-            });
-        }
+                    const dataURL = tempCanvas.toDataURL('image/png');
+                    resolve({ name: `frame${String(i).padStart(4, '0')}.png`, dataURL });
+                }));
+            }
 
+            const frameData = await Promise.all(promises);
+
+            await worker.write('input.txt', 'file frame*.png');
+            for (const frame of frameData) {
+                const imgData = atob(frame.dataURL.split(',')[1]);
+                const imgBytes = new Uint8Array(imgData.length);
+                for (let i = 0; i < imgData.length; i++) {
+                    imgBytes[i] = imgData.charCodeAt(i);
+                }
+                await worker.write(frame.name, imgBytes);
+            }
+
+            await worker.run(`-r ${frameRate} -i input.txt -c:v libx264 -vf "fps=${frameRate},format=yuv420p" -movflags +faststart output.mp4`);
+
+            const data = await worker.read('output.mp4');
+
+            const blob = new Blob([data.buffer], { type: 'video/mp4' });
+            const url = URL.createObjectURL(blob);
+            
+            const downloadLink = document.createElement('a');
+            downloadLink.href = url;
+            downloadLink.download = 'animation.mp4';
+            document.body.appendChild(downloadLink);
+            downloadLink.click();
+            document.body.removeChild(downloadLink);
+            
+            transform = originalTransform;
+            redrawCanvas(); // Restore the original view
+        }
 
         function updateFrameInfo() {
             document.getElementById('frame-info').textContent = `إطار ${currentFrame + 1} / ${animationData.length}`;
@@ -850,6 +880,5 @@
         updateLayersList();
         saveState();
     </script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </body>
 </html>
