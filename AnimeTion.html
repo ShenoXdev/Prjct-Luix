@@ -3,179 +3,234 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>موقع بسيط للأنيميشن</title>
+    <title>موقع أنيميشن متقدم</title>
     
     <style>
         /* تنسيقات أساسية */
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            background-color: #f0f0f0;
-            flex-direction: column;
+        :root {
+            --bg-color: #2c3e50;
+            --main-color: #34495e;
+            --secondary-color: #ecf0f1;
+            --accent-color: #e74c3c;
+            --text-color: #f1c40f;
+            --border-color: #7f8c8d;
         }
 
-        .container {
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            margin: 0;
             display: flex;
-            flex-direction: column;
-            width: 100%;
-            max-width: 1000px;
             height: 100vh;
-            border: 1px solid #ccc;
-            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            background-color: var(--bg-color);
+            color: var(--secondary-color);
+            flex-direction: column;
             overflow: hidden;
         }
 
-        /* شريط الأدوات */
-        .toolbar {
+        .main-layout {
             display: flex;
-            flex-wrap: wrap;
-            justify-content: space-around;
-            padding: 10px;
-            background-color: #333;
-            color: white;
+            flex-grow: 1;
+        }
+
+        /* شريط الأدوات الجانبي */
+        .sidebar {
+            width: 200px;
+            background-color: var(--main-color);
+            padding: 15px;
+            box-shadow: 2px 0 5px rgba(0, 0, 0, 0.2);
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .tool-section h4 {
+            border-bottom: 2px solid var(--border-color);
+            padding-bottom: 5px;
+            margin-bottom: 10px;
+            color: var(--text-color);
+        }
+
+        .tool-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
             gap: 10px;
         }
 
-        .tool-group {
-            display: flex;
-            gap: 5px;
-            align-items: center;
-        }
-
-        .toolbar button, .toolbar input[type="file"] {
-            padding: 8px 12px;
-            border: none;
+        .sidebar button {
+            padding: 10px;
+            background-color: var(--bg-color);
+            color: var(--secondary-color);
+            border: 1px solid var(--border-color);
+            border-radius: 5px;
             cursor: pointer;
-            background-color: #555;
+            transition: all 0.2s ease;
+        }
+
+        .sidebar button:hover, .sidebar button.active {
+            background-color: var(--accent-color);
+            border-color: var(--accent-color);
             color: white;
-            border-radius: 4px;
+            transform: translateY(-2px);
         }
 
-        .toolbar button:hover {
-            background-color: #777;
+        /* حقول الأدوات */
+        .controls-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
         }
 
-        /* مساحة الرسم */
+        .controls-group label {
+            color: var(--secondary-color);
+        }
+
+        input[type="color"], input[type="range"] {
+            width: 100%;
+        }
+
+        /* مساحة الرسم (الكانفاس) */
         .canvas-container {
             flex-grow: 1;
             display: flex;
             justify-content: center;
             align-items: center;
-            background-color: #fff;
-            overflow: hidden; /* لمنع الرسم خارج حدود الكانفاس */
+            background-color: var(--bg-color);
+            overflow: hidden;
         }
 
         canvas {
-            background-color: #fff;
-            border: 1px solid #ccc;
-            touch-action: none; /* لمنع السكرول مع اللمس */
+            background-color: white;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.3);
+            touch-action: none;
         }
 
         /* التايملاين والطبقات */
         .timeline {
+            background-color: var(--main-color);
             padding: 10px;
-            background-color: #444;
-            color: white;
             display: flex;
             justify-content: space-between;
             align-items: center;
             flex-wrap: wrap;
+            box-shadow: 0 -2px 5px rgba(0, 0, 0, 0.2);
+        }
+        
+        .timeline button {
+            padding: 8px 15px;
+            background-color: var(--bg-color);
+            color: var(--secondary-color);
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.2s;
         }
 
-        .timeline-controls {
+        .timeline button:hover {
+            background-color: var(--accent-color);
+        }
+
+        .layers-list {
             display: flex;
-            gap: 10px;
+            gap: 5px;
             align-items: center;
         }
 
-        .layers-container {
-            display: flex;
-            flex-direction: column;
-            gap: 5px;
-            align-items: flex-end;
-        }
-
-        #layers-list div {
+        .layer-item {
             padding: 5px 10px;
-            background-color: #666;
-            border-radius: 4px;
+            background-color: var(--bg-color);
+            border-radius: 5px;
             cursor: pointer;
-            margin-bottom: 2px;
         }
 
-        #layers-list .active-layer {
-            background-color: #888;
-            border: 1px solid #fff;
+        .layer-item.active {
+            background-color: var(--accent-color);
         }
     </style>
 </head>
 <body>
 
-    <div class="container">
-        <header class="toolbar">
-            <div class="tool-group">
-                <button id="line-tool">خط</button>
-                <button id="rect-tool">مستطيل</button>
-                <button id="circle-tool">دايرة</button>
-                <button id="select-tool">تحديد</button>
-                <button id="zoom-tool">تكبير/تصغير</button>
-            </div>
-            
-            <div class="tool-group">
-                <label for="color-picker">اللون:</label>
-                <input type="color" id="color-picker" value="#000000">
-                <label for="line-width">الحجم:</label>
-                <input type="range" id="line-width" min="1" max="20" value="5">
+    <div class="main-layout">
+        <aside class="sidebar">
+            <div class="tool-section">
+                <h4>أدوات الرسم</h4>
+                <div class="tool-grid">
+                    <button id="brush-tool" class="active">فرشاة</button>
+                    <button id="line-tool">خط</button>
+                    <button id="rect-tool">مستطيل</button>
+                    <button id="circle-tool">دايرة</button>
+                </div>
             </div>
 
-            <div class="tool-group">
-                <button id="undo-btn">تراجع</button>
-                <button id="redo-btn">إعادة</button>
+            <div class="tool-section">
+                <h4>التحكم</h4>
+                <div class="tool-grid">
+                    <button id="select-tool">تحديد</button>
+                    <button id="zoom-tool">تكبير/تصغير</button>
+                </div>
             </div>
 
-            <div class="tool-group">
-                <input type="file" id="import-json" accept=".json">
-                <button id="export-json">تصدير JSON</button>
-                <button id="export-mp4">تصدير MP4</button>
+            <div class="tool-section">
+                <h4>الخصائص</h4>
+                <div class="controls-group">
+                    <label for="color-picker">اللون</label>
+                    <input type="color" id="color-picker" value="#000000">
+                    <label for="line-width">الحجم</label>
+                    <input type="range" id="line-width" min="1" max="50" value="5">
+                </div>
             </div>
-        </header>
+
+            <div class="tool-section">
+                <h4>ملفات</h4>
+                <div class="controls-group">
+                    <button id="export-json">تصدير JSON</button>
+                    <input type="file" id="import-json" accept=".json" style="display: none;">
+                    <label for="import-json" class="sidebar-button" style="cursor: pointer; padding: 10px; border: 1px solid var(--border-color); border-radius: 5px; background-color: var(--bg-color); color: var(--secondary-color); text-align: center;">استيراد JSON</label>
+                    <button id="export-mp4">تصدير MP4</button>
+                </div>
+            </div>
+
+            <div class="tool-section">
+                <h4>إجراءات</h4>
+                <div class="tool-grid">
+                    <button id="undo-btn">تراجع</button>
+                    <button id="redo-btn">إعادة</button>
+                </div>
+            </div>
+        </aside>
 
         <main class="canvas-container">
             <canvas id="animationCanvas"></canvas>
         </main>
-        
-        <footer class="timeline">
-            <div class="timeline-controls">
-                <button id="prev-frame">السابق</button>
-                <span id="frame-info">إطار 1 / 1</span>
-                <button id="next-frame">التالي</button>
-                <button id="add-frame">إضافة إطار</button>
-            </div>
-            <div class="layers-container">
-                <h4>الطبقات</h4>
-                <div id="layers-list">
-                    </div>
-                <button id="add-layer">إضافة طبقة</button>
-            </div>
-        </footer>
     </div>
+
+    <footer class="timeline">
+        <div class="timeline-controls">
+            <button id="prev-frame">السابق</button>
+            <span id="frame-info">إطار 1 / 1</span>
+            <button id="next-frame">التالي</button>
+            <button id="add-frame">إضافة إطار</button>
+        </div>
+        <div class="layers-container">
+            <h4>الطبقات</h4>
+            <div class="layers-list" id="layers-list">
+                </div>
+            <button id="add-layer">إضافة طبقة</button>
+        </div>
+    </footer>
 
     <script>
         // تعريف المتغيرات والعناصر
         const canvas = document.getElementById('animationCanvas');
         const ctx = canvas.getContext('2d');
-        const timeline = document.querySelector('.timeline');
-
+        const tools = document.querySelectorAll('.sidebar button');
+        
         // تعيين أبعاد الكانفاس
-        canvas.width = 800;
-        canvas.height = 600;
+        canvas.width = 1200;
+        canvas.height = 700;
 
         // متغيرات حالة الرسم
-        let currentTool = 'line';
+        let currentTool = 'brush';
         let drawing = false;
         let startX, startY;
         let currentZoom = 1;
@@ -198,7 +253,6 @@
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             const frameData = animationData[currentFrame];
             
-            // رسم كل الطبقات
             frameData.layers.forEach(layer => {
                 layer.forEach(shape => {
                     if (shape) {
@@ -207,7 +261,14 @@
                         ctx.lineWidth = shape.width;
                         
                         // رسم الأشكال بناءً على نوعها
-                        if (shape.type === 'line') {
+                        if (shape.type === 'brush') {
+                            ctx.lineCap = 'round';
+                            for (let i = 0; i < shape.points.length - 1; i++) {
+                                ctx.moveTo(shape.points[i].x, shape.points[i].y);
+                                ctx.lineTo(shape.points[i+1].x, shape.points[i+1].y);
+                            }
+                            ctx.stroke();
+                        } else if (shape.type === 'line') {
                             ctx.moveTo(shape.startX, shape.startY);
                             ctx.lineTo(shape.endX, shape.endY);
                             ctx.stroke();
@@ -224,7 +285,6 @@
 
         // وظيفة حفظ حالة المشروع للتراجع
         function saveState() {
-            // حذف الحالات القديمة بعد التراجع
             if (historyIndex < history.length - 1) {
                 history = history.slice(0, historyIndex + 1);
             }
@@ -236,14 +296,32 @@
         // ===================================
         // التحكم في الأحداث (Events)
         // ===================================
-
+        
         // بداية الرسم
         canvas.addEventListener('mousedown', (e) => {
-            if (currentTool === 'zoom') return; // منع الرسم عند التكبير
-            
+            if (currentTool === 'zoom') return;
             drawing = true;
             startX = e.offsetX / currentZoom;
             startY = e.offsetY / currentZoom;
+            
+            if (currentTool === 'brush') {
+                const currentLayerData = animationData[currentFrame].layers[currentLayer];
+                currentLayerData.push({
+                    type: 'brush',
+                    points: [{ x: startX, y: startY }],
+                    color: document.getElementById('color-picker').value,
+                    width: document.getElementById('line-width').value
+                });
+            }
+        });
+        
+        // التحرك أثناء الرسم (للفرشاة)
+        canvas.addEventListener('mousemove', (e) => {
+            if (!drawing || currentTool !== 'brush') return;
+            const currentLayerData = animationData[currentFrame].layers[currentLayer];
+            const currentPath = currentLayerData[currentLayerData.length - 1];
+            currentPath.points.push({ x: e.offsetX / currentZoom, y: e.offsetY / currentZoom });
+            redrawCanvas();
         });
 
         // نهاية الرسم
@@ -255,41 +333,43 @@
             const endY = e.offsetY / currentZoom;
             const currentLayerData = animationData[currentFrame].layers[currentLayer];
             
-            // بناء الشكل الجديد
-            let newShape;
-            const color = document.getElementById('color-picker').value;
-            const width = document.getElementById('line-width').value;
-            
-            if (currentTool === 'line') {
-                newShape = { type: 'line', startX, startY, endX, endY, color, width };
-            } else if (currentTool === 'rect') {
-                const rectWidth = endX - startX;
-                const rectHeight = endY - startY;
-                newShape = { type: 'rectangle', x: startX, y: startY, width: rectWidth, height: rectHeight, color, width };
-            } else if (currentTool === 'circle') {
-                const radius = Math.sqrt(Math.pow(endX - startX, 2) + Math.pow(endY - startY, 2));
-                newShape = { type: 'circle', x: startX, y: startY, radius, color, width };
+            if (currentTool !== 'brush') {
+                let newShape;
+                const color = document.getElementById('color-picker').value;
+                const width = document.getElementById('line-width').value;
+                
+                if (currentTool === 'line') {
+                    newShape = { type: 'line', startX, startY, endX, endY, color, width };
+                } else if (currentTool === 'rect') {
+                    const rectWidth = endX - startX;
+                    const rectHeight = endY - startY;
+                    newShape = { type: 'rectangle', x: startX, y: startY, width: rectWidth, height: rectHeight, color, width };
+                } else if (currentTool === 'circle') {
+                    const radius = Math.sqrt(Math.pow(endX - startX, 2) + Math.pow(endY - startY, 2));
+                    newShape = { type: 'circle', x: startX, y: startY, radius, color, width };
+                }
+                if (newShape) {
+                    currentLayerData.push(newShape);
+                }
             }
-            
-            if (newShape) {
-                currentLayerData.push(newShape);
-                saveState();
-                redrawCanvas();
-            }
+            saveState();
+            redrawCanvas();
         });
-
+        
         // ===================================
         // وظائف الأدوات
         // ===================================
-
+        
         // اختيار الأدوات
-        document.getElementById('line-tool').addEventListener('click', () => currentTool = 'line');
-        document.getElementById('rect-tool').addEventListener('click', () => currentTool = 'rect');
-        document.getElementById('circle-tool').addEventListener('click', () => currentTool = 'circle');
-        document.getElementById('select-tool').addEventListener('click', () => currentTool = 'select');
-        document.getElementById('zoom-tool').addEventListener('click', () => currentTool = 'zoom');
+        tools.forEach(button => {
+            button.addEventListener('click', () => {
+                tools.forEach(btn => btn.classList.remove('active'));
+                button.classList.add('active');
+                currentTool = button.id.replace('-tool', '');
+            });
+        });
 
-        // وظيفة التراجع
+        // وظيفة التراجع والإعادة
         document.getElementById('undo-btn').addEventListener('click', () => {
             if (historyIndex > 0) {
                 historyIndex--;
@@ -298,7 +378,6 @@
             }
         });
 
-        // وظيفة الإعادة
         document.getElementById('redo-btn').addEventListener('click', () => {
             if (historyIndex < history.length - 1) {
                 historyIndex++;
@@ -307,20 +386,21 @@
             }
         });
 
-        // إضافة إطار جديد
+        // ===================================
+        // التحكم في الإطارات والطبقات
+        // ===================================
+
         document.getElementById('add-frame').addEventListener('click', () => {
             const newFrame = {
-                // تكرار الرسم من الإطار اللي قبله
                 layers: JSON.parse(JSON.stringify(animationData[currentFrame].layers))
             };
-            animationData.push(newFrame);
-            currentFrame = animationData.length - 1;
+            animationData.splice(currentFrame + 1, 0, newFrame);
+            currentFrame++;
             updateFrameInfo();
             redrawCanvas();
             saveState();
         });
 
-        // إضافة طبقة جديدة
         document.getElementById('add-layer').addEventListener('click', () => {
             animationData[currentFrame].layers.push([]);
             currentLayer = animationData[currentFrame].layers.length - 1;
@@ -328,7 +408,6 @@
             saveState();
         });
 
-        // الانتقال للإطار السابق
         document.getElementById('prev-frame').addEventListener('click', () => {
             if (currentFrame > 0) {
                 currentFrame--;
@@ -338,7 +417,6 @@
             }
         });
 
-        // الانتقال للإطار التالي
         document.getElementById('next-frame').addEventListener('click', () => {
             if (currentFrame < animationData.length - 1) {
                 currentFrame++;
@@ -352,7 +430,6 @@
         // وظائف التصدير والاستيراد
         // ===================================
 
-        // تصدير JSON
         document.getElementById('export-json').addEventListener('click', () => {
             const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(animationData));
             const downloadAnchorNode = document.createElement('a');
@@ -363,9 +440,9 @@
             downloadAnchorNode.remove();
         });
 
-        // استيراد JSON
         document.getElementById('import-json').addEventListener('change', (e) => {
             const file = e.target.files[0];
+            if (!file) return;
             const reader = new FileReader();
             reader.onload = (event) => {
                 animationData = JSON.parse(event.target.result);
@@ -374,16 +451,15 @@
                 updateFrameInfo();
                 updateLayersList();
                 redrawCanvas();
+                saveState();
             };
             reader.readAsText(file);
         });
-
-        // وظيفة التصدير MP4
-        // **ملاحظة:** دي وظيفة معقدة جداً ومحتاجة مكتبة خارجية زي FFmpeg.js. الكود ده مجرد زرار مش هيشتغل من غير المكتبة.
+        
         document.getElementById('export-mp4').addEventListener('click', () => {
             alert('تصدير MP4 يتطلب مكتبة خارجية (مثل FFmpeg.js) وهو أمر معقد.');
         });
-
+        
         // ===================================
         // تحديث الواجهة
         // ===================================
@@ -400,8 +476,9 @@
                 layerDiv.textContent = `طبقة ${index + 1}`;
                 layerDiv.dataset.index = index;
                 if (index === currentLayer) {
-                    layerDiv.classList.add('active-layer');
+                    layerDiv.classList.add('active');
                 }
+                layerDiv.classList.add('layer-item');
                 layerDiv.addEventListener('click', () => {
                     currentLayer = index;
                     updateLayersList();
