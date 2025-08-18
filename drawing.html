@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="en" dir="ltr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>تطبيق الرسم - Luix Endless Drawing</title>
+    <title>Drawing App - Luix Endless Drawing</title>
     <style>
         /* Basic Colors from Luix */
         :root {
@@ -121,7 +121,7 @@
         .zoom-info {
             position: fixed;
             bottom: 10px;
-            right: 10px;
+            left: 10px;
             background: rgba(0,0,0,0.5);
             color: white;
             padding: 5px 10px;
@@ -188,14 +188,14 @@
         <button id="saveBtn">💾</button>
         <button id="saveJsonBtn">📁</button>
         <button id="loadJsonBtn">📂</button>
-        <a href="https://shenoxdev.github.io/Endless-Drawings-1.0/LuixPage.html#" class="return-btn">العودة إلى Luix</a>
+        <a href="https://shenoxdev.github.io/Endless-Drawings-1.0/LuixPage.html#" class="return-btn">Return to Luix</a>
     </div>
     
     <input type="file" id="jsonFileInput" accept=".json">
 </div>
 
 <canvas id="canvas"></canvas>
-<div class="zoom-info" id="zoomInfo">زوم: 1x</div>
+<div class="zoom-info" id="zoomInfo">Zoom: 1x</div>
 
 <script>
     const canvas = document.getElementById("canvas");
@@ -239,9 +239,9 @@
 
     function updateZoomInfo() {
         if (zoom < 0.0001 || zoom > 10000) {
-            zoomInfo.textContent = `زوم: ${zoom.toExponential(2)}x`;
+            zoomInfo.textContent = `Zoom: ${zoom.toExponential(2)}x`;
         } else {
-            zoomInfo.textContent = `زوم: ${zoom.toFixed(zoom >= 1 ? 2 : 8)}x`;
+            zoomInfo.textContent = `Zoom: ${zoom.toFixed(zoom >= 1 ? 2 : 8)}x`;
         }
     }
 
@@ -488,7 +488,7 @@
                 undonePaths = [];
                 drawAll();
             } catch (err) {
-                alert("خطأ في تحميل الملف: " + err.message);
+                alert("Error loading file: " + err.message);
             }
         };
         reader.readAsText(file);
