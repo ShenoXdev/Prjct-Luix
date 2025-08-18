@@ -92,7 +92,7 @@
             align-items: center;
             background-color: var(--bg-color);
             overflow: hidden;
-            position: relative; /* لإضافة الزوم والتحريك */
+            position: relative;
         }
 
         #animationCanvas {
@@ -101,7 +101,8 @@
             box-shadow: 0 0 15px rgba(0, 0, 0, 0.3);
             touch-action: none;
             cursor: crosshair;
-            transition: transform 0.2s ease-out; /* حركة سلسة للزوم */
+            transition: transform 0.2s ease-out;
+            transform-origin: 0 0;
         }
 
         .timeline {
@@ -144,9 +145,24 @@
         .layer-item.active {
             background-color: var(--accent-color);
         }
+
+        #export-progress {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 20px;
+            background-color: rgba(0, 0, 0, 0.8);
+            color: white;
+            border-radius: 10px;
+            z-index: 1000;
+            display: none;
+            text-align: center;
+        }
     </style>
 </head>
 <body>
+    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.7/dist/ffmpeg.min.js"></script>
 
     <div class="main-layout">
         <aside class="sidebar">
@@ -155,7 +171,6 @@
                 <div class="tool-grid">
                     <button id="brush-tool" class="active">فرشاة</button>
                     <button id="line-tool">خط</button>
-                    <button id="rect-tool">مستطيل</button>
                     <button id="circle-tool">دايرة</button>
                 </div>
             </div>
@@ -164,7 +179,6 @@
                 <h4>التحكم</h4>
                 <div class="tool-grid">
                     <button id="select-tool">تحديد</button>
-                    <button id="zoom-tool">تكبير/تصغير</button>
                 </div>
             </div>
 
@@ -216,12 +230,18 @@
             <button id="add-layer">إضافة طبقة</button>
         </div>
     </footer>
+    
+    <div id="export-progress">
+        <p>جاري تصدير الفيديو...</p>
+        <div style="width: 100px; height: 100px; border: 5px solid #fff; border-top-color: var(--accent-color); border-radius: 50%; animation: spin 1s linear infinite;"></div>
+    </div>
 
     <script>
         const canvas = document.getElementById('animationCanvas');
         const ctx = canvas.getContext('2d');
         const tools = document.querySelectorAll('.sidebar button');
-        
+        const ffmpeg = new FFmpeg.FFmpeg();
+
         canvas.width = 1200;
         canvas.height = 700;
 
@@ -233,13 +253,25 @@
         let currentLayer = 0;
         let history = [];
         let historyIndex = -1;
+        let currentShapePreview = null;
+        
+        let transform = {
+            scale: 1,
+            translateX: 0,
+            translateY: 0
+        };
 
-        let currentShapePreview = null; // الشكل المؤقت اللي بيترسم
-
+        //
+        // وظائف الرسم الأساسية
+        //
+        
         function redrawCanvas() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            const frameData = animationData[currentFrame];
+            ctx.save();
+            ctx.translate(transform.translateX, transform.translateY);
+            ctx.scale(transform.scale, transform.scale);
             
+            const frameData = animationData[currentFrame];
             frameData.layers.forEach(layer => {
                 layer.forEach(shape => {
                     if (shape) {
@@ -248,10 +280,11 @@
                 });
             });
 
-            // رسم الشكل المؤقت
             if (currentShapePreview) {
                 drawShape(currentShapePreview);
             }
+            
+            ctx.restore();
         }
         
         function drawShape(shape) {
@@ -270,8 +303,6 @@
                 ctx.moveTo(shape.startX, shape.startY);
                 ctx.lineTo(shape.endX, shape.endY);
                 ctx.stroke();
-            } else if (shape.type === 'rectangle') {
-                ctx.strokeRect(shape.x, shape.y, shape.width, shape.height);
             } else if (shape.type === 'circle') {
                 ctx.arc(shape.x, shape.y, shape.radius, 0, Math.PI * 2);
                 ctx.stroke();
@@ -287,16 +318,14 @@
             historyIndex++;
         }
 
-        // ===================================
-        // التحكم في الأحداث (Events)
-        // ===================================
+        //
+        // التحكم في الأحداث
+        //
         
-        // بداية الرسم
         canvas.addEventListener('mousedown', (e) => {
-            if (currentTool === 'zoom') return;
             drawing = true;
-            startX = e.offsetX;
-            startY = e.offsetY;
+            startX = (e.offsetX - transform.translateX) / transform.scale;
+            startY = (e.offsetY - transform.translateY) / transform.scale;
             
             if (currentTool === 'brush') {
                 currentShapePreview = {
@@ -308,20 +337,15 @@
             }
         });
         
-        // التحرك أثناء الرسم (للفرشاة والأشكال الهندسية)
         canvas.addEventListener('mousemove', (e) => {
             if (!drawing) return;
-            const mouseX = e.offsetX;
-            const mouseY = e.offsetY;
+            const mouseX = (e.offsetX - transform.translateX) / transform.scale;
+            const mouseY = (e.offsetY - transform.translateY) / transform.scale;
             
             if (currentTool === 'brush') {
                 currentShapePreview.points.push({ x: mouseX, y: mouseY });
             } else if (currentTool === 'line') {
                 currentShapePreview = { type: 'line', startX, startY, endX: mouseX, endY: mouseY, color: document.getElementById('color-picker').value, width: document.getElementById('line-width').value };
-            } else if (currentTool === 'rect') {
-                const rectWidth = mouseX - startX;
-                const rectHeight = mouseY - startY;
-                currentShapePreview = { type: 'rectangle', x: startX, y: startY, width: rectWidth, height: rectHeight, color: document.getElementById('color-picker').value, width: document.getElementById('line-width').value };
             } else if (currentTool === 'circle') {
                 const radius = Math.sqrt(Math.pow(mouseX - startX, 2) + Math.pow(mouseY - startY, 2));
                 currentShapePreview = { type: 'circle', x: startX, y: startY, radius, color: document.getElementById('color-picker').value, width: document.getElementById('line-width').value };
@@ -329,7 +353,6 @@
             redrawCanvas();
         });
 
-        // نهاية الرسم
         canvas.addEventListener('mouseup', (e) => {
             if (!drawing) return;
             drawing = false;
@@ -338,47 +361,80 @@
                 const currentLayerData = animationData[currentFrame].layers[currentLayer];
                 currentLayerData.push(currentShapePreview);
             }
-            currentShapePreview = null; // إزالة الشكل المؤقت
+            currentShapePreview = null;
             saveState();
             redrawCanvas();
         });
-        
-        // ===================================
-        // وظائف الزوم
-        // ===================================
 
-        document.getElementById('zoom-tool').addEventListener('click', () => {
-            currentTool = 'zoom';
-            tools.forEach(btn => btn.classList.remove('active'));
-            document.getElementById('zoom-tool').classList.add('active');
-        });
+        //
+        // وظيفة الزوم (Mouse Wheel)
+        //
 
         canvas.addEventListener('wheel', (e) => {
-            if (currentTool !== 'zoom') return;
             e.preventDefault();
-            const delta = Math.sign(e.deltaY); // -1 for zoom in, 1 for zoom out
-            let newZoom = canvas.style.transform.match(/scale\((.*?)\)/);
-            if (newZoom) {
-                newZoom = parseFloat(newZoom[1]);
-            } else {
-                newZoom = 1;
-            }
+            const delta = Math.sign(e.deltaY);
+            const scaleFactor = 1.1; // عامل التكبير
+            const oldScale = transform.scale;
+            let newScale = oldScale;
 
             if (delta < 0) {
-                newZoom += 0.1;
+                newScale *= scaleFactor;
             } else {
-                newZoom -= 0.1;
+                newScale /= scaleFactor;
             }
 
-            if (newZoom < 0.2) newZoom = 0.2;
-            if (newZoom > 5) newZoom = 5;
+            if (newScale < 0.1) newScale = 0.1;
+            if (newScale > 10) newScale = 10;
+            
+            // حساب الإزاحة للحفاظ على التركيز على نقطة الزوم
+            const mouseX = e.offsetX;
+            const mouseY = e.offsetY;
+            
+            transform.translateX -= (mouseX / oldScale - mouseX / newScale) * oldScale;
+            transform.translateY -= (mouseY / oldScale - mouseY / newScale) * oldScale;
+            transform.scale = newScale;
 
-            canvas.style.transform = `scale(${newZoom})`;
+            canvas.style.transform = `scale(${newScale})`;
+            redrawCanvas();
         });
         
-        // ===================================
-        // وظائف الأدوات الأخرى
-        // ===================================
+        //
+        // وظائف تصدير MP4
+        //
+
+        document.getElementById('export-mp4').addEventListener('click', async () => {
+            const progressIndicator = document.getElementById('export-progress');
+            progressIndicator.style.display = 'block';
+
+            await ffmpeg.load();
+
+            for (let i = 0; i < animationData.length; i++) {
+                // إعادة رسم كل إطار على الكانفاس لتجهيزه للتصدير
+                currentFrame = i;
+                redrawCanvas();
+                const imageURL = canvas.toDataURL('image/png');
+                const imageBlob = await fetch(imageURL).then(res => res.blob());
+                const imageBuffer = await imageBlob.arrayBuffer();
+
+                await ffmpeg.writeFile(`frame_${i.toString().padStart(3, '0')}.png`, new Uint8Array(imageBuffer));
+            }
+            
+            // دمج الإطارات في فيديو
+            await ffmpeg.exec(['-framerate', '10', '-i', 'frame_%03d.png', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', 'output.mp4']);
+            
+            const data = await ffmpeg.readFile('output.mp4');
+            
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(new Blob([data.buffer], { type: 'video/mp4' }));
+            a.download = 'animation.mp4';
+            a.click();
+            
+            progressIndicator.style.display = 'none';
+        });
+
+        //
+        // باقي وظائف الأدوات والواجهة
+        //
         
         tools.forEach(button => {
             button.addEventListener('click', () => {
@@ -387,7 +443,7 @@
                 currentTool = button.id.replace('-tool', '');
             });
         });
-
+        
         document.getElementById('undo-btn').addEventListener('click', () => {
             if (historyIndex > 0) {
                 historyIndex--;
@@ -464,10 +520,6 @@
             reader.readAsText(file);
         });
         
-        document.getElementById('export-mp4').addEventListener('click', () => {
-            alert('تصدير MP4 يتطلب مكتبة خارجية (مثل FFmpeg.js) وهو أمر معقد.');
-        });
-        
         function updateFrameInfo() {
             document.getElementById('frame-info').textContent = `إطار ${currentFrame + 1} / ${animationData.length}`;
         }
@@ -490,7 +542,7 @@
                 layersList.appendChild(layerDiv);
             });
         }
-
+        
         redrawCanvas();
         updateFrameInfo();
         updateLayersList();
