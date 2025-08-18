@@ -107,30 +107,6 @@
         .select-mode {
             cursor: move !important;
         }
-
-        .resize-handle {
-            position: absolute;
-            width: 10px;
-            height: 10px;
-            background: var(--accent-color);
-            border: 1px solid white;
-            cursor: nwse-resize;
-            border-radius: 50%;
-            pointer-events: all;
-        }
-
-        .rotate-handle {
-            position: absolute;
-            top: -20px;
-            left: 50%;
-            width: 10px;
-            height: 10px;
-            background: var(--accent-color);
-            border: 1px solid white;
-            cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" style="fill:rgba(255, 255, 255, 1);"><path d="M12 2C6.486 2 2 6.486 2 12s4.486 10 10 10 10-4.486 10-10S17.514 2 12 2zm0 18c-4.411 0-8-3.589-8-8s3.589-8 8-8 8 3.589 8 8-3.589 8-8 8zM15 8c0 1.654-1.346 3-3 3-1.654 0-3-1.346-3-3s1.346-3 3-3c1.654 0 3 1.346 3 3z"/></svg>'), auto;
-            border-radius: 50%;
-            pointer-events: all;
-        }
         
         .timeline {
             background-color: var(--main-color);
@@ -247,7 +223,6 @@
         const canvas = document.getElementById('animationCanvas');
         const ctx = canvas.getContext('2d');
         const tools = document.querySelectorAll('.sidebar button');
-        const canvasContainer = document.querySelector('.canvas-container');
         
         canvas.width = 1200;
         canvas.height = 700;
@@ -266,6 +241,7 @@
         let isDragging = false;
         let isResizing = false;
         let isRotating = false;
+        let activeHandle = null;
 
         let transform = {
             scale: 1,
@@ -273,10 +249,10 @@
             y: 0
         };
 
-        function getTransformedPoint(x, y) {
+        function getTransformedPoint(clientX, clientY) {
             const rect = canvas.getBoundingClientRect();
-            const mouseX = (x - rect.left - transform.x) / transform.scale;
-            const mouseY = (y - rect.top - transform.y) / transform.scale;
+            const mouseX = (clientX - rect.left - transform.x) / transform.scale;
+            const mouseY = (clientY - rect.top - transform.y) / transform.scale;
             return { x: mouseX, y: mouseY };
         }
 
@@ -301,19 +277,22 @@
             }
 
             ctx.restore();
-
-            if (selectedShape) {
+            
+            if (currentTool === 'select' && selectedShape) {
                 drawSelectionBox(selectedShape);
             }
         }
         
         function drawShape(shape) {
             ctx.save();
-            if (shape.type !== 'brush') {
-                ctx.translate(shape.x || 0, shape.y || 0);
-                ctx.rotate(shape.rotation || 0);
-                ctx.scale(shape.scale || 1, shape.scale || 1);
-            }
+            
+            const shapeX = shape.x !== undefined ? shape.x : shape.startX;
+            const shapeY = shape.y !== undefined ? shape.y : shape.startY;
+
+            // Apply shape-specific transformations
+            ctx.translate(shapeX, shapeY);
+            ctx.rotate(shape.rotation || 0);
+            ctx.scale(shape.scale || 1, shape.scale || 1);
             
             ctx.strokeStyle = shape.color;
             ctx.lineWidth = shape.width;
@@ -322,16 +301,16 @@
                 ctx.lineCap = 'round';
                 ctx.beginPath();
                 if (shape.points.length > 1) {
-                    ctx.moveTo(shape.points[0].x, shape.points[0].y);
+                    ctx.moveTo(shape.points[0].x - shapeX, shape.points[0].y - shapeY);
                     for (let i = 1; i < shape.points.length; i++) {
-                        ctx.lineTo(shape.points[i].x, shape.points[i].y);
+                        ctx.lineTo(shape.points[i].x - shapeX, shape.points[i].y - shapeY);
                     }
                 }
                 ctx.stroke();
             } else if (shape.type === 'line') {
                 ctx.beginPath();
-                ctx.moveTo(shape.startX - (shape.x || 0), shape.startY - (shape.y || 0));
-                ctx.lineTo(shape.endX - (shape.x || 0), shape.endY - (shape.y || 0));
+                ctx.moveTo(0, 0);
+                ctx.lineTo(shape.endX - shape.startX, shape.endY - shape.startY);
                 ctx.stroke();
             } else if (shape.type === 'circle') {
                 ctx.beginPath();
@@ -340,18 +319,12 @@
             }
             ctx.restore();
         }
-
-        function drawSelectionBox(shape) {
-            const shapeX = (shape.x || shape.startX);
-            const shapeY = (shape.y || shape.startY);
-            const scale = shape.scale || 1;
-            const rotation = shape.rotation || 0;
-
-            let bounds;
+        
+        function getShapeBounds(shape) {
             if (shape.type === 'circle') {
-                bounds = { x: -shape.radius, y: -shape.radius, width: shape.radius * 2, height: shape.radius * 2 };
+                return { x: -shape.radius, y: -shape.radius, width: shape.radius * 2, height: shape.radius * 2 };
             } else if (shape.type === 'line') {
-                bounds = { x: 0, y: 0, width: shape.endX - shape.startX, height: shape.endY - shape.startY };
+                return { x: 0, y: 0, width: shape.endX - shape.startX, height: shape.endY - shape.startY };
             } else if (shape.type === 'brush') {
                 let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
                 shape.points.forEach(p => {
@@ -360,66 +333,52 @@
                     maxX = Math.max(maxX, p.x);
                     maxY = Math.max(maxY, p.y);
                 });
-                bounds = { x: minX - shapeX, y: minY - shapeY, width: maxX - minX, height: maxY - minY };
+                return { x: minX - (shape.x || shape.startX), y: minY - (shape.y || shape.startY), width: maxX - minX, height: maxY - minY };
             }
+        }
+
+        function drawSelectionBox(shape) {
+            const shapeX = shape.x !== undefined ? shape.x : shape.startX;
+            const shapeY = shape.y !== undefined ? shape.y : shape.startY;
+            const scale = shape.scale || 1;
+            const rotation = shape.rotation || 0;
+            const bounds = getShapeBounds(shape);
 
             // Draw bounding box
-            const corners = [
-                { x: bounds.x, y: bounds.y },
-                { x: bounds.x + bounds.width, y: bounds.y },
-                { x: bounds.x + bounds.width, y: bounds.y + bounds.height },
-                { x: bounds.x, y: bounds.y + bounds.height }
-            ];
-
             ctx.save();
+            ctx.translate(transform.x, transform.y);
+            ctx.scale(transform.scale, transform.scale);
+            ctx.translate(shapeX, shapeY);
+            ctx.rotate(rotation);
+            ctx.scale(scale, scale);
+            
             ctx.strokeStyle = 'red';
             ctx.setLineDash([5, 5]);
-
-            ctx.beginPath();
-            const p1 = rotatePoint(corners[0], {x:0,y:0}, rotation);
-            const p2 = rotatePoint(corners[1], {x:0,y:0}, rotation);
-            const p3 = rotatePoint(corners[2], {x:0,y:0}, rotation);
-            const p4 = rotatePoint(corners[3], {x:0,y:0}, rotation);
-
-            ctx.moveTo(shapeX + p1.x * scale, shapeY + p1.y * scale);
-            ctx.lineTo(shapeX + p2.x * scale, shapeY + p2.y * scale);
-            ctx.lineTo(shapeX + p3.x * scale, shapeY + p3.y * scale);
-            ctx.lineTo(shapeX + p4.x * scale, shapeY + p4.y * scale);
-            ctx.closePath();
-            ctx.stroke();
+            ctx.lineWidth = 2 / (transform.scale * scale);
+            ctx.strokeRect(bounds.x, bounds.y, bounds.width, bounds.height);
+            ctx.setLineDash([]);
             
-            ctx.restore();
-            
-            // Add resize and rotate handles
-            const handleSize = 10;
+            // Draw handles
+            const handleSize = 10 / (transform.scale * scale);
             const handles = [
                 { x: bounds.x, y: bounds.y, cursor: 'nwse-resize' },
                 { x: bounds.x + bounds.width, y: bounds.y, cursor: 'nesw-resize' },
                 { x: bounds.x + bounds.width, y: bounds.y + bounds.height, cursor: 'nwse-resize' },
                 { x: bounds.x, y: bounds.y + bounds.height, cursor: 'nesw-resize' },
             ];
-
-            handles.forEach(handle => {
-                const rotatedHandle = rotatePoint(handle, {x:0, y:0}, rotation);
-                const screenX = shapeX + rotatedHandle.x * scale;
-                const screenY = shapeY + rotatedHandle.y * scale;
-
-                const handleDiv = document.createElement('div');
-                handleDiv.classList.add('resize-handle');
-                handleDiv.style.left = `${screenX - handleSize/2}px`;
-                handleDiv.style.top = `${screenY - handleSize/2}px`;
-                handleDiv.style.cursor = handle.cursor;
-                handleDiv.dataset.type = 'resize';
-                canvasContainer.appendChild(handleDiv);
+            
+            ctx.fillStyle = 'red';
+            handles.forEach(h => {
+                ctx.beginPath();
+                ctx.arc(h.x, h.y, handleSize / 2, 0, Math.PI * 2);
+                ctx.fill();
             });
 
-            const rotateHandle = rotatePoint({ x: bounds.x + bounds.width / 2, y: bounds.y - 30}, {x:0,y:0}, rotation);
-            const rotateDiv = document.createElement('div');
-            rotateDiv.classList.add('rotate-handle');
-            rotateDiv.style.left = `${shapeX + rotateHandle.x * scale - handleSize/2}px`;
-            rotateDiv.style.top = `${shapeY + rotateHandle.y * scale - handleSize/2}px`;
-            rotateDiv.dataset.type = 'rotate';
-            canvasContainer.appendChild(rotateDiv);
+            // Draw rotate handle
+            ctx.beginPath();
+            ctx.arc(bounds.x + bounds.width / 2, bounds.y - 30 / (transform.scale * scale), handleSize / 2, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
         }
 
         function rotatePoint(point, center, angle) {
@@ -436,7 +395,7 @@
 
             const transformedX = (x - transform.x) / transform.scale;
             const transformedY = (y - transform.y) / transform.scale;
-
+            
             if (shape.type === 'brush') {
                 if (shape.points.length < 2) return false;
                 ctx.moveTo(shape.points[0].x, shape.points[0].y);
@@ -444,20 +403,59 @@
                     ctx.lineTo(shape.points[i].x, shape.points[i].y);
                 }
                 ctx.lineWidth = shape.width + 10;
-                return ctx.isPointInStroke(transformedX, transformedY);
+                const result = ctx.isPointInStroke(transformedX, transformedY);
+                ctx.restore();
+                return result;
             } else if (shape.type === 'line') {
                 ctx.moveTo(shape.startX, shape.startY);
                 ctx.lineTo(shape.endX, shape.endY);
                 ctx.lineWidth = shape.width + 10;
-                return ctx.isPointInStroke(transformedX, transformedY);
+                const result = ctx.isPointInStroke(transformedX, transformedY);
+                ctx.restore();
+                return result;
             } else if (shape.type === 'circle') {
                 ctx.arc(shape.x, shape.y, shape.radius, 0, Math.PI * 2);
-                ctx.lineWidth = shape.width;
-                return ctx.isPointInStroke(transformedX, transformedY);
+                const result = ctx.isPointInPath(transformedX, transformedY);
+                ctx.restore();
+                return result;
             }
             ctx.restore();
             return false;
         }
+
+        function getHandleType(x, y, shape) {
+            if (!shape) return null;
+            const shapeX = shape.x !== undefined ? shape.x : shape.startX;
+            const shapeY = shape.y !== undefined ? shape.y : shape.startY;
+            const scale = shape.scale || 1;
+            const rotation = shape.rotation || 0;
+            const bounds = getShapeBounds(shape);
+            const transformedX = (x - transform.x) / transform.scale;
+            const transformedY = (y - transform.y) / transform.scale;
+
+            const pointInShapeSpace = rotatePoint({x: transformedX, y: transformedY}, {x: shapeX, y: shapeY}, -rotation);
+            const handleSize = 10;
+
+            const handles = [
+                { x: shapeX + bounds.x * scale, y: shapeY + bounds.y * scale, type: 'resize' },
+                { x: shapeX + (bounds.x + bounds.width) * scale, y: shapeY + bounds.y * scale, type: 'resize' },
+                { x: shapeX + (bounds.x + bounds.width) * scale, y: shapeY + (bounds.y + bounds.height) * scale, type: 'resize' },
+                { x: shapeX + bounds.x * scale, y: shapeY + (bounds.y + bounds.height) * scale, type: 'resize' },
+            ];
+
+            for (const handle of handles) {
+                if (Math.abs(transformedX - handle.x) < handleSize && Math.abs(transformedY - handle.y) < handleSize) {
+                    return handle.type;
+                }
+            }
+
+            const rotateHandleY = shapeY + (bounds.y - 30) * scale;
+            if (Math.abs(transformedX - (shapeX + bounds.x + bounds.width/2) * scale) < handleSize && Math.abs(transformedY - rotateHandleY) < handleSize) {
+                return 'rotate';
+            }
+            return null;
+        }
+
 
         function saveState() {
             if (historyIndex < history.length - 1) {
@@ -472,20 +470,22 @@
         // التحكم في الأحداث
         // ===================================
 
-        function removeHandles() {
-            document.querySelectorAll('.resize-handle, .rotate-handle').forEach(h => h.remove());
-        }
-        
         canvas.addEventListener('mousedown', (e) => {
             const { x, y } = getTransformedPoint(e.clientX, e.clientY);
-
+            
             if (currentTool === 'select') {
                 selectedShape = findShapeAt(x, y);
-                removeHandles();
                 if (selectedShape) {
-                    isDragging = true;
-                    startX = x;
-                    startY = y;
+                    activeHandle = getHandleType(e.clientX, e.clientY, selectedShape);
+                    if (activeHandle === 'resize') {
+                        isResizing = true;
+                    } else if (activeHandle === 'rotate') {
+                        isRotating = true;
+                    } else {
+                        isDragging = true;
+                        startX = x;
+                        startY = y;
+                    }
                     canvas.classList.add('select-mode');
                 } else {
                     selectedShape = null;
@@ -496,14 +496,14 @@
                 startX = x;
                 startY = y;
                 selectedShape = null;
-                removeHandles();
                 
                 if (currentTool === 'brush') {
                     currentShapePreview = {
                         type: 'brush',
                         points: [{ x: startX, y: startY }],
                         color: document.getElementById('color-picker').value,
-                        width: document.getElementById('line-width').value
+                        width: document.getElementById('line-width').value,
+                        x: 0, y: 0, rotation: 0, scale: 1
                     };
                 }
             }
@@ -511,19 +511,13 @@
         
         canvas.addEventListener('mousemove', (e) => {
             const { x: mouseX, y: mouseY } = getTransformedPoint(e.clientX, e.clientY);
-            const rect = canvas.getBoundingClientRect();
-
-            if (currentTool === 'select') {
-                 // Change cursor based on hover
-                const hoveredHandle = e.target.closest('.resize-handle, .rotate-handle');
-                if (hoveredHandle) {
-                    return; // Prevent canvas cursor change
-                }
-            }
-
+            
             if (isDragging && selectedShape) {
                 const dx = mouseX - startX;
                 const dy = mouseY - startY;
+
+                const shapeX = selectedShape.x !== undefined ? selectedShape.x : selectedShape.startX;
+                const shapeY = selectedShape.y !== undefined ? selectedShape.y : selectedShape.startY;
 
                 if (selectedShape.type === 'brush') {
                     selectedShape.points = selectedShape.points.map(p => ({ x: p.x + dx, y: p.y + dy }));
@@ -539,8 +533,31 @@
                 
                 startX = mouseX;
                 startY = mouseY;
+                redrawCanvas();
+                return;
+            }
 
-                removeHandles();
+            if (isResizing && selectedShape) {
+                // Resize logic is complex and depends on which handle is being dragged
+                // For simplicity, we'll implement a basic proportional resize from the center
+                const shapeX = selectedShape.x !== undefined ? selectedShape.x : selectedShape.startX;
+                const shapeY = selectedShape.y !== undefined ? selectedShape.y : selectedShape.startY;
+                const oldScale = selectedShape.scale || 1;
+                
+                const dx = mouseX - shapeX;
+                const dy = mouseY - shapeY;
+                const newScale = Math.sqrt(dx * dx + dy * dy) / (Math.sqrt(Math.pow(startX - shapeX, 2) + Math.pow(startY - shapeY, 2)));
+                selectedShape.scale = newScale;
+                redrawCanvas();
+                return;
+            }
+
+            if (isRotating && selectedShape) {
+                const shapeX = selectedShape.x !== undefined ? selectedShape.x : selectedShape.startX;
+                const shapeY = selectedShape.y !== undefined ? selectedShape.y : selectedShape.startY;
+
+                const angle = Math.atan2(mouseY - shapeY, mouseX - shapeX);
+                selectedShape.rotation = angle;
                 redrawCanvas();
                 return;
             }
@@ -559,11 +576,13 @@
         });
 
         canvas.addEventListener('mouseup', (e) => {
-            if (isDragging) {
+            if (isDragging || isResizing || isRotating) {
                 isDragging = false;
+                isResizing = false;
+                isRotating = false;
+                activeHandle = null;
                 canvas.classList.remove('select-mode');
                 saveState();
-                removeHandles();
                 redrawCanvas();
             }
             if (!drawing) return;
@@ -639,7 +658,6 @@
                 button.classList.add('active');
                 currentTool = button.id.replace('-tool', '');
                 selectedShape = null;
-                removeHandles();
                 redrawCanvas();
             });
         });
