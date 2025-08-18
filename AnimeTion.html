@@ -71,7 +71,7 @@
             transform: translateY(-2px);
         }
         
-        #export-mp4 {
+        #toggle-record {
             background-color: #e74c3c;
             color: white;
             font-weight: bold;
@@ -192,7 +192,7 @@
                     <button id="export-json">تصدير JSON</button>
                     <input type="file" id="import-json" accept=".json" style="display: none;">
                     <label for="import-json" class="sidebar-button" style="cursor: pointer; padding: 10px; border: 1px solid var(--border-color); border-radius: 5px; background-color: var(--bg-color); color: var(--secondary-color); text-align: center;">استيراد JSON</label>
-                    <button id="export-mp4">تصدير MP4</button>
+                    <button id="toggle-record">بدء التسجيل</button>
                 </div>
             </div>
 
@@ -225,12 +225,11 @@
         </div>
     </footer>
 
-    <script src="https://cdn.jsdelivr.net/npm/canvas-to-webm@1.0.1/dist/canvas-to-webm.min.js"></script>
     <script>
         const canvas = document.getElementById('animationCanvas');
         const ctx = canvas.getContext('2d');
         const tools = document.querySelectorAll('.sidebar button');
-        const exportMP4Button = document.getElementById('export-mp4');
+        const toggleRecordButton = document.getElementById('toggle-record');
         
         canvas.width = 1200;
         canvas.height = 700;
@@ -258,6 +257,9 @@
         };
 
         let isRecording = false;
+        let recorder;
+        let chunks = [];
+        let animationLoop;
 
         function getTransformedPoint(clientX, clientY) {
             const rect = canvas.getBoundingClientRect();
@@ -752,35 +754,109 @@
         });
         
         // ===================================
-        // نظام التصدير الجديد
+        // نظام التسجيل الجديد (MediaRecorder API)
         // ===================================
-
-        exportMP4Button.addEventListener('click', () => {
+        
+        toggleRecordButton.addEventListener('click', () => {
             if (isRecording) {
-                isRecording = false;
-                exportMP4Button.textContent = 'تصدير MP4';
+                stopRecording();
             } else {
-                startMP4Recording();
+                startRecording();
             }
         });
 
-        async function startMP4Recording() {
-            isRecording = true;
-            exportMP4Button.textContent = 'جاري التصدير...';
+        function startRecording() {
+            const stream = canvas.captureStream(30); // 30 إطار في الثانية
+            recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+            
+            recorder.ondataavailable = e => {
+                chunks.push(e.data);
+            };
+            
+            recorder.onstop = () => {
+                const blob = new Blob(chunks, { type: 'video/webm' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                document.body.appendChild(a);
+                a.style.display = 'none';
+                a.href = url;
+                a.download = 'animation.webm'; // يمكنك تغيير الامتداد إلى mp4 إذا كان المتصفح يدعمه
+                a.click();
+                window.URL.revokeObjectURL(url);
+                chunks = []; // Clear chunks for the next recording
+            };
 
-            const recorder = new CanvasToWebM(canvas, {
-                quality: 0.9,
-                frameRate: 30
-            });
+            chunks = [];
+            recorder.start();
+            isRecording = true;
+            toggleRecordButton.textContent = 'إيقاف التسجيل';
+            animateFrames();
+        }
+
+        function stopRecording() {
+            if (recorder && isRecording) {
+                recorder.stop();
+                isRecording = false;
+                toggleRecordButton.textContent = 'بدء التسجيل';
+                cancelAnimationFrame(animationLoop);
+            }
+        }
+        
+        let frameIndex = 0;
+        function animateFrames() {
+            if (!isRecording) return;
             
             const originalFrame = currentFrame;
+            
+            // Draw the next frame
+            currentFrame = frameIndex % animationData.length;
+            redrawCanvas();
 
-            for (let i = 0; i < animationData.length; i++) {
-                currentFrame = i;
+            frameIndex++;
+            
+            // If all frames have been played once, stop
+            if (frameIndex >= animationData.length) {
+                stopRecording();
+                frameIndex = 0;
+                currentFrame = originalFrame;
                 redrawCanvas();
-                recorder.addFrame();
-                // We need to wait a little for the frame to be rendered
-                await new Promise(resolve => setTimeout(resolve, 1000 / 30));
+                return;
             }
 
-            const videoBlob = recorder.get</script></body></html>
+            animationLoop = requestAnimationFrame(animateFrames);
+        }
+
+        // ===================================
+        // وظائف الواجهة
+        // ===================================
+
+        function updateFrameInfo() {
+            document.getElementById('frame-info').textContent = `إطار ${currentFrame + 1} / ${animationData.length}`;
+        }
+
+        function updateLayersList() {
+            const layersList = document.getElementById('layers-list');
+            layersList.innerHTML = '';
+            animationData[currentFrame].layers.forEach((layer, index) => {
+                const layerDiv = document.createElement('div');
+                layerDiv.textContent = `طبقة ${index + 1}`;
+                layerDiv.dataset.index = index;
+                if (index === currentLayer) {
+                    layerDiv.classList.add('active');
+                }
+                layerDiv.classList.add('layer-item');
+                layerDiv.addEventListener('click', () => {
+                    currentLayer = index;
+                    updateLayersList();
+                });
+                layersList.appendChild(layerDiv);
+            });
+        }
+
+        redrawCanvas();
+        updateFrameInfo();
+        updateLayersList();
+        saveState();
+    </script>
+</body>
+</html>
