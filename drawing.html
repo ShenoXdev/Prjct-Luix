@@ -3,46 +3,40 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Drawing App - Luix Endless Drawing</title>
+    <title>Luix Endless Drawing</title>
     <style>
-        /* Basic Colors from Luix */
+        /* General Luix colors and fonts */
         :root {
-            --primary-color: #ff00ff; /* Bright purple */
-            --background-color: #ffffff;
-            --text-color: #333333;
-            --border-color: #ff00ff;
-            --menu-bg: #f0f0f0;
+            --luix-primary: #ff00ff; /* The bright purple */
+            --luix-bg-light: #f0f0f0;
+            --luix-text-dark: #333333;
         }
-        
+
+        /* Base styles */
         html, body {
             margin: 0;
             padding: 0;
             overflow: hidden;
             touch-action: none;
             font-family: Arial, sans-serif;
-            background-color: var(--background-color);
-            color: var(--text-color);
-        }
-        
-        #menu {
-            position: fixed;
-            top: 0;
-            right: 0;
-            left: 0;
-            background-color: var(--background-color);
-            padding: 10px 20px;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-            align-items: center;
-            justify-content: space-between;
-            z-index: 10;
-            border-bottom: 2px solid var(--border-color);
+            background-color: var(--luix-bg-light);
+            color: var(--luix-text-dark);
+            height: 100vh;
         }
 
-        .logo {
-            height: 40px;
-            fill: var(--primary-color);
+        /* Top bar (Header) */
+        .top-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background-color: white;
+            padding: 10px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 3px solid var(--luix-primary);
+            z-index: 20;
         }
 
         .logo-container {
@@ -51,33 +45,106 @@
             gap: 10px;
         }
 
-        #menu button, #menu a {
-            background-color: transparent;
-            border: 1px solid var(--primary-color);
-            color: var(--primary-color);
+        .logo {
+            height: 40px;
+            fill: var(--luix-primary);
+        }
+
+        .logo-text {
+            font-size: 24px;
+            font-weight: bold;
+            color: var(--luix-primary);
+            text-decoration: none;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 15px;
+        }
+
+        .nav-link {
+            font-weight: bold;
+            color: var(--luix-primary);
+            text-decoration: none;
+            transition: color 0.3s ease;
+        }
+
+        .nav-link:hover {
+            color: #cc00cc;
+        }
+        
+        .nav-button {
+            background-color: var(--luix-primary);
+            color: white;
+            border: none;
             padding: 8px 15px;
             border-radius: 5px;
             font-weight: bold;
             cursor: pointer;
-            transition: background-color 0.3s ease, color 0.3s ease;
             text-decoration: none;
-            text-align: center;
         }
 
-        #menu button:hover, #menu a:hover {
-            background-color: var(--primary-color);
-            color: var(--background-color);
+        /* Main Drawing Area */
+        .main-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            padding-top: 65px; /* Adjust for the top bar height */
+            height: calc(100vh - 65px);
+            box-sizing: border-box;
+            background-color: white;
+        }
+        
+        /* The drawing canvas */
+        canvas {
+            width: 100%;
+            height: 100%;
+            background: white;
+            touch-action: none;
+            border: 3px solid var(--luix-primary);
+            box-sizing: border-box;
         }
 
-        #menu label {
+        /* Bottom Bar (Drawing Tools) */
+        .bottom-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background-color: var(--luix-primary);
+            color: white;
+            padding: 10px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            z-index: 20;
+        }
+
+        .bottom-bar button, .bottom-bar a, .bottom-bar input {
+            background-color: transparent;
+            color: white;
+            border: 1px solid white;
+            padding: 8px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            text-decoration: none;
+        }
+
+        .bottom-bar button:hover {
+            background-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .bottom-bar label {
             display: flex;
             align-items: center;
             gap: 5px;
-            color: var(--primary-color);
-            font-weight: bold;
         }
 
-        #menu input[type="color"] {
+        .bottom-bar input[type="color"] {
             -webkit-appearance: none;
             -moz-appearance: none;
             appearance: none;
@@ -88,66 +155,47 @@
             cursor: pointer;
         }
 
-        #menu input[type="color"]::-webkit-color-swatch {
+        .bottom-bar input[type="color"]::-webkit-color-swatch {
             border-radius: 50%;
-            border: 1px solid var(--primary-color);
+            border: 1px solid white;
         }
         
-        #menu input[type="color"]::-moz-color-swatch {
+        .bottom-bar input[type="color"]::-moz-color-swatch {
             border-radius: 50%;
-            border: 1px solid var(--primary-color);
+            border: 1px solid white;
         }
 
-        #menu input[type="number"] {
+        .bottom-bar input[type="number"] {
             width: 60px;
             padding: 5px;
-            border: 1px solid var(--primary-color);
+            border: 1px solid white;
             border-radius: 5px;
-            background-color: var(--background-color);
-            color: var(--text-color);
+            background-color: var(--luix-primary);
+            color: white;
             text-align: center;
-        }
-        
-        canvas {
-            position: absolute;
-            top: 60px; /* Adjusted for the new menu height */
-            left: 0;
-            width: 100%;
-            height: calc(100% - 60px);
-            background: white;
-            touch-action: none;
         }
         
         .zoom-info {
             position: fixed;
-            bottom: 10px;
+            top: 75px; /* Positioned below the top bar */
             left: 10px;
             background: rgba(0,0,0,0.5);
             color: white;
             padding: 5px 10px;
             border-radius: 5px;
             font-size: 12px;
-            direction: ltr; /* Ensure numbers are left-to-right */
-        }
-        
-        input[type="file"] {
-            display: none;
+            direction: ltr;
+            z-index: 10;
         }
 
-        @media (max-width: 768px) {
-            #menu {
-                justify-content: flex-start;
-                padding: 10px;
-            }
-            #menu button, #menu a {
-                padding: 5px 10px;
-            }
+        input[type="file"] {
+            display: none;
         }
     </style>
 </head>
 <body>
 
-<div id="menu">
+<div class="top-bar">
     <div class="logo-container">
         <svg class="logo" xmlns="http://www.w3.org/2000/svg" width="206.276" height="109" viewBox="0 0 206.276 109">
             <g id="Group_1" data-name="Group 1" transform="translate(-16 -21)">
@@ -177,25 +225,31 @@
                 </g>
             </g>
         </svg>
+        <span class="logo-text">Luix</span>
     </div>
-
-    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-        <label>🎨 <input type="color" id="colorPicker" value="#000000"></label>
-        <label>🖌️ <input type="number" id="brushSize" min="1" max="100" value="3" step="1"></label>
-        <button id="undoBtn">↩️</button>
-        <button id="redoBtn">↪️</button>
-        <button id="clearBtn">🧹</button>
-        <button id="saveBtn">💾</button>
-        <button id="saveJsonBtn">📁</button>
-        <button id="loadJsonBtn">📂</button>
-        <a href="https://shenoxdev.github.io/Endless-Drawings-1.0/LuixPage.html#" class="return-btn">Return to Luix</a>
+    <div class="nav-links">
+        <a href="#" class="nav-link">Home</a>
+        <a href="#" class="nav-link">Endless Drawing</a>
     </div>
-    
-    <input type="file" id="jsonFileInput" accept=".json">
+    <button class="nav-button">Login</button>
 </div>
 
-<canvas id="canvas"></canvas>
-<div class="zoom-info" id="zoomInfo">Zoom: 1x</div>
+<div class="main-container">
+    <canvas id="canvas"></canvas>
+    <div class="zoom-info" id="zoomInfo">Zoom: 1x</div>
+</div>
+
+<div class="bottom-bar">
+    <label>Color <input type="color" id="colorPicker" value="#000000"></label>
+    <label>Size <input type="number" id="brushSize" min="1" max="100" value="3" step="1"></label>
+    <button id="undoBtn">Undo ↩️</button>
+    <button id="redoBtn">Redo ↪️</button>
+    <button id="clearBtn">Clear 🧹</button>
+    <button id="saveBtn">Save PNG 💾</button>
+    <button id="saveJsonBtn">Export JSON 📁</button>
+    <button id="loadJsonBtn">Import JSON 📂</button>
+    <input type="file" id="jsonFileInput" accept=".json">
+</div>
 
 <script>
     const canvas = document.getElementById("canvas");
@@ -212,10 +266,19 @@
     const zoomInfo = document.getElementById("zoomInfo");
 
     // Initialize canvas
-    let width = window.innerWidth;
-    let height = window.innerHeight - 60; // Adjusted for new menu height
-    canvas.width = width;
-    canvas.height = height;
+    function resizeCanvas() {
+        const topBarHeight = document.querySelector('.top-bar').offsetHeight;
+        const bottomBarHeight = document.querySelector('.bottom-bar').offsetHeight;
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight - topBarHeight - bottomBarHeight;
+        
+        // Reposition the canvas
+        canvas.style.top = topBarHeight + 'px';
+    }
+
+    // Call resize initially and on window resize
+    resizeCanvas();
+    window.addEventListener("resize", resizeCanvas);
 
     // Drawing state
     let paths = [];
@@ -507,14 +570,6 @@
             paths.push(undonePaths.pop());
             drawAll();
         }
-    });
-
-    window.addEventListener("resize", () => {
-        width = window.innerWidth;
-        height = window.innerHeight - 60;
-        canvas.width = width;
-        canvas.height = height;
-        drawAll();
     });
 
     // Initial draw
