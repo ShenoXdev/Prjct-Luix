@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Luix Endless Drawing</title>
+    <title>Endless Drawing</title>
     <style>
         /* General Luix colors and fonts */
         :root {
@@ -34,7 +34,7 @@
             padding: 10px 20px;
             display: flex;
             align-items: center;
-            justify-content: space-between;
+            justify-content: flex-start;
             border-bottom: 3px solid var(--luix-primary);
             z-index: 20;
         }
@@ -82,6 +82,7 @@
             font-weight: bold;
             cursor: pointer;
             text-decoration: none;
+            display: none; /* Hide the login button */
         }
 
         /* Main Drawing Area */
@@ -225,12 +226,9 @@
                 </g>
             </g>
         </svg>
-        <span class="logo-text">Luix</span>
-    </div>
+        <span class="logo-text"></span> </div>
     <div class="nav-links">
-        <a href="#" class="nav-link">Home</a>
-        <a href="#" class="nav-link">Endless Drawing</a>
-    </div>
+        </div>
     <button class="nav-button">Login</button>
 </div>
 
