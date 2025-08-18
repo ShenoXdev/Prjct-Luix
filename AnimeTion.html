@@ -71,7 +71,7 @@
             transform: translateY(-2px);
         }
         
-        #export-webm {
+        #export-mp4 {
             background-color: #e74c3c;
             color: white;
             font-weight: bold;
@@ -192,7 +192,7 @@
                     <button id="export-json">تصدير JSON</button>
                     <input type="file" id="import-json" accept=".json" style="display: none;">
                     <label for="import-json" class="sidebar-button" style="cursor: pointer; padding: 10px; border: 1px solid var(--border-color); border-radius: 5px; background-color: var(--bg-color); color: var(--secondary-color); text-align: center;">استيراد JSON</label>
-                    <button id="export-webm">تصدير WEBM</button>
+                    <button id="export-mp4">تصدير MP4</button>
                 </div>
             </div>
 
@@ -225,11 +225,12 @@
         </div>
     </footer>
 
+    <script src="https://cdn.jsdelivr.net/npm/canvas-to-webm@1.0.1/dist/canvas-to-webm.min.js"></script>
     <script>
         const canvas = document.getElementById('animationCanvas');
         const ctx = canvas.getContext('2d');
         const tools = document.querySelectorAll('.sidebar button');
-        const exportWebMButton = document.getElementById('export-webm');
+        const exportMP4Button = document.getElementById('export-mp4');
         
         canvas.width = 1200;
         canvas.height = 700;
@@ -256,8 +257,6 @@
             y: 0
         };
 
-        let recorder;
-        let chunks = [];
         let isRecording = false;
 
         function getTransformedPoint(clientX, clientY) {
@@ -753,108 +752,35 @@
         });
         
         // ===================================
-        // نظام التصدير المباشر لـ WebM
+        // نظام التصدير الجديد
         // ===================================
 
-        exportWebMButton.addEventListener('click', () => {
+        exportMP4Button.addEventListener('click', () => {
             if (isRecording) {
-                stopRecording();
+                isRecording = false;
+                exportMP4Button.textContent = 'تصدير MP4';
             } else {
-                startRecording();
+                startMP4Recording();
             }
         });
 
-        function startRecording() {
-            const stream = canvas.captureStream(30); // 30 إطار في الثانية
-            recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
-            
-            recorder.ondataavailable = e => {
-                chunks.push(e.data);
-            };
-            
-            recorder.onstop = () => {
-                const blob = new Blob(chunks, { type: 'video/webm' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                document.body.appendChild(a);
-                a.style.display = 'none';
-                a.href = url;
-                a.download = 'animation.webm';
-                a.click();
-                window.URL.revokeObjectURL(url);
-            };
-
-            chunks = [];
-            recorder.start();
+        async function startMP4Recording() {
             isRecording = true;
-            exportWebMButton.textContent = 'إيقاف التصدير';
-            animateFrames();
-        }
+            exportMP4Button.textContent = 'جاري التصدير...';
 
-        function stopRecording() {
-            if (recorder && isRecording) {
-                recorder.stop();
-                isRecording = false;
-                exportWebMButton.textContent = 'تصدير WEBM';
-            }
-        }
-        
-        let frameIndex = 0;
-        function animateFrames() {
-            if (!isRecording) return;
+            const recorder = new CanvasToWebM(canvas, {
+                quality: 0.9,
+                frameRate: 30
+            });
             
             const originalFrame = currentFrame;
-            
-            // Draw the next frame
-            currentFrame = frameIndex % animationData.length;
-            redrawCanvas();
 
-            frameIndex++;
-            
-            // If all frames have been played once, stop
-            if (frameIndex >= animationData.length) {
-                stopRecording();
-                frameIndex = 0;
-                currentFrame = originalFrame;
+            for (let i = 0; i < animationData.length; i++) {
+                currentFrame = i;
                 redrawCanvas();
-                return;
+                recorder.addFrame();
+                // We need to wait a little for the frame to be rendered
+                await new Promise(resolve => setTimeout(resolve, 1000 / 30));
             }
 
-            // Loop animation for playback
-            setTimeout(animateFrames, 1000 / 30); // 30 frames per second
-        }
-
-        // ===================================
-        // وظائف الواجهة
-        // ===================================
-
-        function updateFrameInfo() {
-            document.getElementById('frame-info').textContent = `إطار ${currentFrame + 1} / ${animationData.length}`;
-        }
-
-        function updateLayersList() {
-            const layersList = document.getElementById('layers-list');
-            layersList.innerHTML = '';
-            animationData[currentFrame].layers.forEach((layer, index) => {
-                const layerDiv = document.createElement('div');
-                layerDiv.textContent = `طبقة ${index + 1}`;
-                layerDiv.dataset.index = index;
-                if (index === currentLayer) {
-                    layerDiv.classList.add('active');
-                }
-                layerDiv.classList.add('layer-item');
-                layerDiv.addEventListener('click', () => {
-                    currentLayer = index;
-                    updateLayersList();
-                });
-                layersList.appendChild(layerDiv);
-            });
-        }
-
-        redrawCanvas();
-        updateFrameInfo();
-        updateLayersList();
-        saveState();
-    </script>
-</body>
-</html>
+            const videoBlob = recorder.get</script></body></html>
