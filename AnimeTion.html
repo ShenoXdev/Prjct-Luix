@@ -81,7 +81,7 @@
             color: var(--secondary-color);
         }
 
-        input[type="color"], input[type="range"] {
+        input[type="color"], input[type="range"], input[type="number"] {
             width: 100%;
         }
 
@@ -104,7 +104,11 @@
             transition: transform 0.2s ease-out;
             transform-origin: 0 0;
         }
-
+        
+        #animationCanvas.select-mode {
+            cursor: move;
+        }
+        
         .timeline {
             background-color: var(--main-color);
             padding: 10px;
@@ -199,6 +203,8 @@
                     <input type="file" id="import-json" accept=".json" style="display: none;">
                     <label for="import-json" class="sidebar-button" style="cursor: pointer; padding: 10px; border: 1px solid var(--border-color); border-radius: 5px; background-color: var(--bg-color); color: var(--secondary-color); text-align: center;">استيراد JSON</label>
                     <button id="export-mp4">تصدير MP4</button>
+                    <label for="fps-input">FPS</label>
+                    <input type="number" id="fps-input" value="24" min="1" max="60">
                 </div>
             </div>
 
@@ -240,8 +246,9 @@
         const canvas = document.getElementById('animationCanvas');
         const ctx = canvas.getContext('2d');
         const tools = document.querySelectorAll('.sidebar button');
+        const fpsInput = document.getElementById('fps-input');
         const ffmpeg = new FFmpeg.FFmpeg();
-
+        
         canvas.width = 1200;
         canvas.height = 700;
 
@@ -261,6 +268,11 @@
             translateY: 0
         };
 
+        // متغيرات أداة التحديد (Select)
+        let selectedShape = null;
+        let isDragging = false;
+        let dragStartX, dragStartY;
+
         //
         // وظائف الرسم الأساسية
         //
@@ -268,8 +280,6 @@
         function redrawCanvas() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.save();
-            ctx.translate(transform.translateX, transform.translateY);
-            ctx.scale(transform.scale, transform.scale);
             
             const frameData = animationData[currentFrame];
             frameData.layers.forEach(layer => {
@@ -284,11 +294,24 @@
                 drawShape(currentShapePreview);
             }
             
+            // رسم حدود الشكل المختار
+            if (selectedShape) {
+                drawSelectionBox(selectedShape);
+            }
+            
             ctx.restore();
         }
         
         function drawShape(shape) {
+            ctx.save();
             ctx.beginPath();
+            
+            // تطبيق التحويلات (تحريك، تدوير، تكبير)
+            ctx.translate(shape.x + shape.width / 2, shape.y + shape.height / 2);
+            ctx.rotate(shape.rotation || 0);
+            ctx.scale(shape.scaleX || 1, shape.scaleY || 1);
+            ctx.translate(-(shape.x + shape.width / 2), -(shape.y + shape.height / 2));
+
             ctx.strokeStyle = shape.color;
             ctx.lineWidth = shape.width;
             
@@ -307,6 +330,11 @@
                 ctx.arc(shape.x, shape.y, shape.radius, 0, Math.PI * 2);
                 ctx.stroke();
             }
+            ctx.restore();
+        }
+        
+        function drawSelectionBox(shape) {
+            // كود رسم حدود التحديد
         }
 
         function saveState() {
@@ -323,24 +351,45 @@
         //
         
         canvas.addEventListener('mousedown', (e) => {
-            drawing = true;
-            startX = (e.offsetX - transform.translateX) / transform.scale;
-            startY = (e.offsetY - transform.translateY) / transform.scale;
+            const mouseX = (e.offsetX - transform.translateX) / transform.scale;
+            const mouseY = (e.offsetY - transform.translateY) / transform.scale;
             
-            if (currentTool === 'brush') {
-                currentShapePreview = {
-                    type: 'brush',
-                    points: [{ x: startX, y: startY }],
-                    color: document.getElementById('color-picker').value,
-                    width: document.getElementById('line-width').value
-                };
+            if (currentTool === 'select') {
+                selectedShape = findShapeAt(mouseX, mouseY);
+                if (selectedShape) {
+                    isDragging = true;
+                    dragStartX = mouseX - (selectedShape.x || selectedShape.startX);
+                    dragStartY = mouseY - (selectedShape.y || selectedShape.startY);
+                    canvas.classList.add('select-mode');
+                }
+            } else {
+                drawing = true;
+                startX = mouseX;
+                startY = mouseY;
+                
+                if (currentTool === 'brush') {
+                    currentShapePreview = {
+                        type: 'brush',
+                        points: [{ x: startX, y: startY }],
+                        color: document.getElementById('color-picker').value,
+                        width: document.getElementById('line-width').value
+                    };
+                }
             }
         });
         
         canvas.addEventListener('mousemove', (e) => {
-            if (!drawing) return;
             const mouseX = (e.offsetX - transform.translateX) / transform.scale;
             const mouseY = (e.offsetY - transform.translateY) / transform.scale;
+
+            if (isDragging && selectedShape) {
+                selectedShape.x = mouseX - dragStartX;
+                selectedShape.y = mouseY - dragStartY;
+                redrawCanvas();
+                return;
+            }
+
+            if (!drawing) return;
             
             if (currentTool === 'brush') {
                 currentShapePreview.points.push({ x: mouseX, y: mouseY });
@@ -354,6 +403,12 @@
         });
 
         canvas.addEventListener('mouseup', (e) => {
+            if (isDragging) {
+                isDragging = false;
+                canvas.classList.remove('select-mode');
+                saveState();
+                redrawCanvas();
+            }
             if (!drawing) return;
             drawing = false;
             
@@ -373,7 +428,7 @@
         canvas.addEventListener('wheel', (e) => {
             e.preventDefault();
             const delta = Math.sign(e.deltaY);
-            const scaleFactor = 1.1; // عامل التكبير
+            const scaleFactor = 1.1;
             const oldScale = transform.scale;
             let newScale = oldScale;
 
@@ -386,7 +441,6 @@
             if (newScale < 0.1) newScale = 0.1;
             if (newScale > 10) newScale = 10;
             
-            // حساب الإزاحة للحفاظ على التركيز على نقطة الزوم
             const mouseX = e.offsetX;
             const mouseY = e.offsetY;
             
@@ -394,10 +448,15 @@
             transform.translateY -= (mouseY / oldScale - mouseY / newScale) * oldScale;
             transform.scale = newScale;
 
-            canvas.style.transform = `scale(${newScale})`;
+            canvas.style.transform = `translate(${transform.translateX}px, ${transform.translateY}px) scale(${newScale})`;
             redrawCanvas();
         });
         
+        function findShapeAt(x, y) {
+            // كود البحث عن شكل
+            return null;
+        }
+
         //
         // وظائف تصدير MP4
         //
@@ -406,10 +465,16 @@
             const progressIndicator = document.getElementById('export-progress');
             progressIndicator.style.display = 'block';
 
+            const fps = parseInt(fpsInput.value, 10);
+            if (isNaN(fps) || fps <= 0) {
+                alert('من فضلك أدخل قيمة صحيحة للإطارات في الثانية.');
+                progressIndicator.style.display = 'none';
+                return;
+            }
+
             await ffmpeg.load();
 
             for (let i = 0; i < animationData.length; i++) {
-                // إعادة رسم كل إطار على الكانفاس لتجهيزه للتصدير
                 currentFrame = i;
                 redrawCanvas();
                 const imageURL = canvas.toDataURL('image/png');
@@ -419,8 +484,7 @@
                 await ffmpeg.writeFile(`frame_${i.toString().padStart(3, '0')}.png`, new Uint8Array(imageBuffer));
             }
             
-            // دمج الإطارات في فيديو
-            await ffmpeg.exec(['-framerate', '10', '-i', 'frame_%03d.png', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', 'output.mp4']);
+            await ffmpeg.exec(['-framerate', `${fps}`, '-i', 'frame_%03d.png', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', 'output.mp4']);
             
             const data = await ffmpeg.readFile('output.mp4');
             
@@ -441,6 +505,8 @@
                 tools.forEach(btn => btn.classList.remove('active'));
                 button.classList.add('active');
                 currentTool = button.id.replace('-tool', '');
+                selectedShape = null;
+                redrawCanvas();
             });
         });
         
