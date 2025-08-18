@@ -104,8 +104,32 @@
             transform-origin: 0 0;
         }
         
-        #animationCanvas.select-mode {
-            cursor: move;
+        .select-mode {
+            cursor: move !important;
+        }
+
+        .resize-handle {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background: var(--accent-color);
+            border: 1px solid white;
+            cursor: nwse-resize;
+            border-radius: 50%;
+            pointer-events: all;
+        }
+
+        .rotate-handle {
+            position: absolute;
+            top: -20px;
+            left: 50%;
+            width: 10px;
+            height: 10px;
+            background: var(--accent-color);
+            border: 1px solid white;
+            cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" style="fill:rgba(255, 255, 255, 1);"><path d="M12 2C6.486 2 2 6.486 2 12s4.486 10 10 10 10-4.486 10-10S17.514 2 12 2zm0 18c-4.411 0-8-3.589-8-8s3.589-8 8-8 8 3.589 8 8-3.589 8-8 8zM15 8c0 1.654-1.346 3-3 3-1.654 0-3-1.346-3-3s1.346-3 3-3c1.654 0 3 1.346 3 3z"/></svg>'), auto;
+            border-radius: 50%;
+            pointer-events: all;
         }
         
         .timeline {
@@ -165,7 +189,9 @@
             <div class="tool-section">
                 <h4>التحكم</h4>
                 <div class="tool-grid">
-                    </div>
+                    <button id="select-tool">تحديد</button>
+                    <button id="reset-zoom-btn">إعادة ضبط الزوم</button>
+                </div>
             </div>
 
             <div class="tool-section">
@@ -221,6 +247,7 @@
         const canvas = document.getElementById('animationCanvas');
         const ctx = canvas.getContext('2d');
         const tools = document.querySelectorAll('.sidebar button');
+        const canvasContainer = document.querySelector('.canvas-container');
         
         canvas.width = 1200;
         canvas.height = 700;
@@ -235,18 +262,30 @@
         let historyIndex = -1;
 
         let currentShapePreview = null;
+        let selectedShape = null;
+        let isDragging = false;
+        let isResizing = false;
+        let isRotating = false;
+
         let transform = {
             scale: 1,
-            translateX: 0,
-            translateY: 0
+            x: 0,
+            y: 0
         };
+
+        function getTransformedPoint(x, y) {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = (x - rect.left - transform.x) / transform.scale;
+            const mouseY = (y - rect.top - transform.y) / transform.scale;
+            return { x: mouseX, y: mouseY };
+        }
 
         function redrawCanvas() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.save();
-            ctx.translate(transform.translateX, transform.translateY);
+            ctx.translate(transform.x, transform.y);
             ctx.scale(transform.scale, transform.scale);
-
+            
             const frameData = animationData[currentFrame];
             
             frameData.layers.forEach(layer => {
@@ -260,30 +299,164 @@
             if (currentShapePreview) {
                 drawShape(currentShapePreview);
             }
-            
+
             ctx.restore();
+
+            if (selectedShape) {
+                drawSelectionBox(selectedShape);
+            }
         }
         
         function drawShape(shape) {
-            ctx.beginPath();
+            ctx.save();
+            if (shape.type !== 'brush') {
+                ctx.translate(shape.x || 0, shape.y || 0);
+                ctx.rotate(shape.rotation || 0);
+                ctx.scale(shape.scale || 1, shape.scale || 1);
+            }
+            
             ctx.strokeStyle = shape.color;
             ctx.lineWidth = shape.width;
             
             if (shape.type === 'brush') {
                 ctx.lineCap = 'round';
-                for (let i = 0; i < shape.points.length - 1; i++) {
-                    ctx.moveTo(shape.points[i].x, shape.points[i].y);
-                    ctx.lineTo(shape.points[i+1].x, shape.points[i+1].y);
+                ctx.beginPath();
+                if (shape.points.length > 1) {
+                    ctx.moveTo(shape.points[0].x, shape.points[0].y);
+                    for (let i = 1; i < shape.points.length; i++) {
+                        ctx.lineTo(shape.points[i].x, shape.points[i].y);
+                    }
                 }
                 ctx.stroke();
             } else if (shape.type === 'line') {
-                ctx.moveTo(shape.startX, shape.startY);
-                ctx.lineTo(shape.endX, shape.endY);
+                ctx.beginPath();
+                ctx.moveTo(shape.startX - (shape.x || 0), shape.startY - (shape.y || 0));
+                ctx.lineTo(shape.endX - (shape.x || 0), shape.endY - (shape.y || 0));
                 ctx.stroke();
             } else if (shape.type === 'circle') {
-                ctx.arc(shape.x, shape.y, shape.radius, 0, Math.PI * 2);
+                ctx.beginPath();
+                ctx.arc(0, 0, shape.radius, 0, Math.PI * 2);
                 ctx.stroke();
             }
+            ctx.restore();
+        }
+
+        function drawSelectionBox(shape) {
+            const shapeX = (shape.x || shape.startX);
+            const shapeY = (shape.y || shape.startY);
+            const scale = shape.scale || 1;
+            const rotation = shape.rotation || 0;
+
+            let bounds;
+            if (shape.type === 'circle') {
+                bounds = { x: -shape.radius, y: -shape.radius, width: shape.radius * 2, height: shape.radius * 2 };
+            } else if (shape.type === 'line') {
+                bounds = { x: 0, y: 0, width: shape.endX - shape.startX, height: shape.endY - shape.startY };
+            } else if (shape.type === 'brush') {
+                let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+                shape.points.forEach(p => {
+                    minX = Math.min(minX, p.x);
+                    minY = Math.min(minY, p.y);
+                    maxX = Math.max(maxX, p.x);
+                    maxY = Math.max(maxY, p.y);
+                });
+                bounds = { x: minX - shapeX, y: minY - shapeY, width: maxX - minX, height: maxY - minY };
+            }
+
+            // Draw bounding box
+            const corners = [
+                { x: bounds.x, y: bounds.y },
+                { x: bounds.x + bounds.width, y: bounds.y },
+                { x: bounds.x + bounds.width, y: bounds.y + bounds.height },
+                { x: bounds.x, y: bounds.y + bounds.height }
+            ];
+
+            ctx.save();
+            ctx.strokeStyle = 'red';
+            ctx.setLineDash([5, 5]);
+
+            ctx.beginPath();
+            const p1 = rotatePoint(corners[0], {x:0,y:0}, rotation);
+            const p2 = rotatePoint(corners[1], {x:0,y:0}, rotation);
+            const p3 = rotatePoint(corners[2], {x:0,y:0}, rotation);
+            const p4 = rotatePoint(corners[3], {x:0,y:0}, rotation);
+
+            ctx.moveTo(shapeX + p1.x * scale, shapeY + p1.y * scale);
+            ctx.lineTo(shapeX + p2.x * scale, shapeY + p2.y * scale);
+            ctx.lineTo(shapeX + p3.x * scale, shapeY + p3.y * scale);
+            ctx.lineTo(shapeX + p4.x * scale, shapeY + p4.y * scale);
+            ctx.closePath();
+            ctx.stroke();
+            
+            ctx.restore();
+            
+            // Add resize and rotate handles
+            const handleSize = 10;
+            const handles = [
+                { x: bounds.x, y: bounds.y, cursor: 'nwse-resize' },
+                { x: bounds.x + bounds.width, y: bounds.y, cursor: 'nesw-resize' },
+                { x: bounds.x + bounds.width, y: bounds.y + bounds.height, cursor: 'nwse-resize' },
+                { x: bounds.x, y: bounds.y + bounds.height, cursor: 'nesw-resize' },
+            ];
+
+            handles.forEach(handle => {
+                const rotatedHandle = rotatePoint(handle, {x:0, y:0}, rotation);
+                const screenX = shapeX + rotatedHandle.x * scale;
+                const screenY = shapeY + rotatedHandle.y * scale;
+
+                const handleDiv = document.createElement('div');
+                handleDiv.classList.add('resize-handle');
+                handleDiv.style.left = `${screenX - handleSize/2}px`;
+                handleDiv.style.top = `${screenY - handleSize/2}px`;
+                handleDiv.style.cursor = handle.cursor;
+                handleDiv.dataset.type = 'resize';
+                canvasContainer.appendChild(handleDiv);
+            });
+
+            const rotateHandle = rotatePoint({ x: bounds.x + bounds.width / 2, y: bounds.y - 30}, {x:0,y:0}, rotation);
+            const rotateDiv = document.createElement('div');
+            rotateDiv.classList.add('rotate-handle');
+            rotateDiv.style.left = `${shapeX + rotateHandle.x * scale - handleSize/2}px`;
+            rotateDiv.style.top = `${shapeY + rotateHandle.y * scale - handleSize/2}px`;
+            rotateDiv.dataset.type = 'rotate';
+            canvasContainer.appendChild(rotateDiv);
+        }
+
+        function rotatePoint(point, center, angle) {
+            const cos = Math.cos(angle);
+            const sin = Math.sin(angle);
+            const nx = (cos * (point.x - center.x)) - (sin * (point.y - center.y)) + center.x;
+            const ny = (sin * (point.x - center.x)) + (cos * (point.y - center.y)) + center.y;
+            return { x: nx, y: ny };
+        }
+        
+        function isPointInShape(x, y, shape) {
+            ctx.save();
+            ctx.beginPath();
+
+            const transformedX = (x - transform.x) / transform.scale;
+            const transformedY = (y - transform.y) / transform.scale;
+
+            if (shape.type === 'brush') {
+                if (shape.points.length < 2) return false;
+                ctx.moveTo(shape.points[0].x, shape.points[0].y);
+                for (let i = 1; i < shape.points.length; i++) {
+                    ctx.lineTo(shape.points[i].x, shape.points[i].y);
+                }
+                ctx.lineWidth = shape.width + 10;
+                return ctx.isPointInStroke(transformedX, transformedY);
+            } else if (shape.type === 'line') {
+                ctx.moveTo(shape.startX, shape.startY);
+                ctx.lineTo(shape.endX, shape.endY);
+                ctx.lineWidth = shape.width + 10;
+                return ctx.isPointInStroke(transformedX, transformedY);
+            } else if (shape.type === 'circle') {
+                ctx.arc(shape.x, shape.y, shape.radius, 0, Math.PI * 2);
+                ctx.lineWidth = shape.width;
+                return ctx.isPointInStroke(transformedX, transformedY);
+            }
+            ctx.restore();
+            return false;
         }
 
         function saveState() {
@@ -296,28 +469,83 @@
         }
 
         // ===================================
-        // التحكم في الأحداث (Events)
+        // التحكم في الأحداث
         // ===================================
+
+        function removeHandles() {
+            document.querySelectorAll('.resize-handle, .rotate-handle').forEach(h => h.remove());
+        }
         
         canvas.addEventListener('mousedown', (e) => {
-            drawing = true;
-            startX = (e.offsetX - transform.translateX) / transform.scale;
-            startY = (e.offsetY - transform.translateY) / transform.scale;
-            
-            if (currentTool === 'brush') {
-                currentShapePreview = {
-                    type: 'brush',
-                    points: [{ x: startX, y: startY }],
-                    color: document.getElementById('color-picker').value,
-                    width: document.getElementById('line-width').value
-                };
+            const { x, y } = getTransformedPoint(e.clientX, e.clientY);
+
+            if (currentTool === 'select') {
+                selectedShape = findShapeAt(x, y);
+                removeHandles();
+                if (selectedShape) {
+                    isDragging = true;
+                    startX = x;
+                    startY = y;
+                    canvas.classList.add('select-mode');
+                } else {
+                    selectedShape = null;
+                    redrawCanvas();
+                }
+            } else {
+                drawing = true;
+                startX = x;
+                startY = y;
+                selectedShape = null;
+                removeHandles();
+                
+                if (currentTool === 'brush') {
+                    currentShapePreview = {
+                        type: 'brush',
+                        points: [{ x: startX, y: startY }],
+                        color: document.getElementById('color-picker').value,
+                        width: document.getElementById('line-width').value
+                    };
+                }
             }
         });
         
         canvas.addEventListener('mousemove', (e) => {
+            const { x: mouseX, y: mouseY } = getTransformedPoint(e.clientX, e.clientY);
+            const rect = canvas.getBoundingClientRect();
+
+            if (currentTool === 'select') {
+                 // Change cursor based on hover
+                const hoveredHandle = e.target.closest('.resize-handle, .rotate-handle');
+                if (hoveredHandle) {
+                    return; // Prevent canvas cursor change
+                }
+            }
+
+            if (isDragging && selectedShape) {
+                const dx = mouseX - startX;
+                const dy = mouseY - startY;
+
+                if (selectedShape.type === 'brush') {
+                    selectedShape.points = selectedShape.points.map(p => ({ x: p.x + dx, y: p.y + dy }));
+                } else if (selectedShape.type === 'line') {
+                    selectedShape.startX += dx;
+                    selectedShape.startY += dy;
+                    selectedShape.endX += dx;
+                    selectedShape.endY += dy;
+                } else if (selectedShape.type === 'circle') {
+                    selectedShape.x += dx;
+                    selectedShape.y += dy;
+                }
+                
+                startX = mouseX;
+                startY = mouseY;
+
+                removeHandles();
+                redrawCanvas();
+                return;
+            }
+
             if (!drawing) return;
-            const mouseX = (e.offsetX - transform.translateX) / transform.scale;
-            const mouseY = (e.offsetY - transform.translateY) / transform.scale;
             
             if (currentTool === 'brush') {
                 currentShapePreview.points.push({ x: mouseX, y: mouseY });
@@ -331,6 +559,13 @@
         });
 
         canvas.addEventListener('mouseup', (e) => {
+            if (isDragging) {
+                isDragging = false;
+                canvas.classList.remove('select-mode');
+                saveState();
+                removeHandles();
+                redrawCanvas();
+            }
             if (!drawing) return;
             drawing = false;
             
@@ -343,18 +578,29 @@
             redrawCanvas();
         });
         
+        function findShapeAt(x, y) {
+            const currentLayerData = animationData[currentFrame].layers[currentLayer];
+            for (let i = currentLayerData.length - 1; i >= 0; i--) {
+                const shape = currentLayerData[i];
+                if (isPointInShape(x, y, shape)) {
+                    return shape;
+                }
+            }
+            return null;
+        }
+
         // ===================================
         // وظيفة الزوم (Mouse Wheel)
         // ===================================
 
         canvas.addEventListener('wheel', (e) => {
             e.preventDefault();
-            const delta = Math.sign(e.deltaY);
+            const delta = -e.deltaY;
             const scaleFactor = 1.1;
             const oldScale = transform.scale;
             let newScale = oldScale;
 
-            if (delta < 0) {
+            if (delta > 0) {
                 newScale *= scaleFactor;
             } else {
                 newScale /= scaleFactor;
@@ -366,11 +612,20 @@
             const mouseX = e.offsetX;
             const mouseY = e.offsetY;
             
-            transform.translateX -= (mouseX / oldScale - mouseX / newScale) * oldScale;
-            transform.translateY -= (mouseY / oldScale - mouseY / newScale) * oldScale;
+            const dx = (mouseX / oldScale - mouseX / newScale) * oldScale;
+            const dy = (mouseY / oldScale - mouseY / newScale) * oldScale;
+
+            transform.x += dx;
+            transform.y += dy;
             transform.scale = newScale;
 
-            canvas.style.transform = `translate(${transform.translateX}px, ${transform.translateY}px) scale(${newScale})`;
+            canvas.style.transform = `translate(${transform.x}px, ${transform.y}px) scale(${newScale})`;
+            redrawCanvas();
+        });
+
+        document.getElementById('reset-zoom-btn').addEventListener('click', () => {
+            transform = { scale: 1, x: 0, y: 0 };
+            canvas.style.transform = `translate(0px, 0px) scale(1)`;
             redrawCanvas();
         });
 
@@ -383,6 +638,9 @@
                 tools.forEach(btn => btn.classList.remove('active'));
                 button.classList.add('active');
                 currentTool = button.id.replace('-tool', '');
+                selectedShape = null;
+                removeHandles();
+                redrawCanvas();
             });
         });
 
