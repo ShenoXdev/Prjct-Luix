@@ -1,0 +1,1139 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Animation & Drawing App</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            touch-action: none;
+        }
+
+        #menu, #timeline {
+            position: fixed;
+            left: 0;
+            right: 0;
+            background-color: #fff;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            z-index: 10;
+        }
+
+        #menu {
+            top: 0;
+            padding: 10px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        #timeline {
+            bottom: 0;
+            padding: 15px 20px;
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .logo-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #cd00e3;
+        }
+        
+        .logo {
+            height: 40px;
+            fill: #cd00e3;
+        }
+        
+        .menu-controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        #menu button, #timeline button, #menu label, .timeline-controls button, #tools-container button {
+            background-color: #cd00e3;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 5px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        
+        #menu button:hover, #timeline button:hover, .timeline-controls button:hover, #tools-container button:hover {
+            background-color: #e846ff;
+        }
+        
+        #menu input[type="color"] {
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            width: 30px;
+            height: 30px;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+        }
+
+        #menu input[type="color"]::-webkit-color-swatch {
+            border-radius: 50%;
+            border: 2px solid #cd00e3;
+        }
+        
+        #menu input[type="color"]::-moz-color-swatch {
+            border-radius: 50%;
+            border: 2px solid #cd00e3;
+        }
+        
+        #menu input[type="number"] {
+            width: 60px;
+            padding: 5px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            text-align: center;
+        }
+
+        #tools-container {
+            display: flex;
+            gap: 5px;
+            align-items: center;
+        }
+
+        #tools-container button.active {
+            background-color: #e846ff;
+        }
+        
+        #canvas-container {
+            position: absolute;
+            top: 60px;
+            bottom: 100px;
+            left: 0;
+            right: 0;
+            background: #eee;
+            overflow: hidden;
+            touch-action: none;
+            cursor: grab;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #canvas-container.panning {
+            cursor: grabbing;
+        }
+        
+        #main-canvas {
+            background: white;
+            box-shadow: 0 0 10px rgba(0,0,0,0.2);
+            touch-action: none;
+            transform-origin: center center;
+        }
+        
+        #main-canvas.tool-brush, #main-canvas.tool-line, #main-canvas.tool-rect, #main-canvas.tool-square, #main-canvas.tool-circle {
+            cursor: crosshair;
+        }
+
+        #main-canvas.tool-select {
+            cursor: default;
+        }
+
+        .select-box {
+            position: absolute;
+            border: 1px dashed blue;
+            pointer-events: none;
+        }
+
+        .select-handle {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background-color: #007bff;
+            border: 1px solid white;
+            border-radius: 50%;
+            z-index: 20;
+            cursor: grab;
+        }
+
+        .select-handle.corner {
+            cursor: nwse-resize;
+        }
+        
+        .zoom-info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.5);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 12px;
+            direction: ltr;
+        }
+        
+        input[type="file"] {
+            display: none;
+        }
+
+        #frame-selector {
+            display: flex;
+            gap: 10px;
+            overflow-x: auto;
+            flex-grow: 1;
+            padding-bottom: 5px;
+        }
+
+        .frame-thumbnail-container {
+            position: relative;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: border-color 0.3s;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            flex-shrink: 0;
+        }
+
+        .frame-thumbnail-container.active {
+            border-color: #cd00e3;
+        }
+
+        .frame-thumbnail {
+            width: 80px;
+            height: 60px;
+            display: block;
+        }
+
+        .frame-number {
+            position: absolute;
+            bottom: 2px;
+            right: 2px;
+            background: rgba(0,0,0,0.6);
+            color: white;
+            font-size: 0.8em;
+            padding: 2px 5px;
+            border-radius: 3px;
+        }
+        
+        .timeline-controls {
+            display: flex;
+            gap: 10px;
+        }
+        
+    </style>
+</head>
+<body>
+
+<div id="menu">
+    <div class="logo-container">
+        <svg class="logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 206.276 109">
+            <g id="Group_1" data-name="Group 1" transform="translate(-16 -21)">
+                <g id="Rectangle_1" data-name="Rectangle 1" transform="translate(16 21)" fill="#cd00e3" stroke="#e846ff" stroke-width="1">
+                    <rect width="30" height="109" rx="5" stroke="none"/>
+                    <rect x="0.5" y="0.5" width="29" height="108" rx="4.5" fill="none"/>
+                </g>
+                <g id="Path_2" data-name="Path 2" transform="translate(75 49)" fill="#cd00e3">
+                    <path d="M 44 52.5 L 9 52.5 C 4.313079833984375 52.5 0.5 48.68692016601562 0.5 44 L 0.5 9 C 0.5 4.485292434692383 4.038429260253906 0.7813649773597717 8.487458229064941 0.5152738690376282 C 8.442087173461914 2.605597257614136 8.314802169799805 10.57339954376221 8.772190093994141 19.05171012878418 C 9.489359855651855 32.34571075439453 11.24147033691406 40.51564025878906 13.97984981536865 43.33457946777344 C 14.73106956481934 44.10789108276367 15.57026958465576 44.5 16.47414016723633 44.5 C 18.66972923278809 44.5 21.41645050048828 42.18362045288086 24.87125968933105 37.41849136352539 C 27.53119087219238 33.74972152709961 30.58935928344727 28.6405200958252 33.96081161499023 22.23282051086426 C 39.15440368652344 12.36199951171875 43.51874923706055 2.374166250228882 44.326416015625 0.5061835646629333 C 48.86270141601562 0.6782845854759216 52.5 4.422357559204102 52.5 9 L 52.5 44 C 52.5 48.68692016601562 48.68692016601562 52.5 44 52.5 Z" stroke="none"/>
+                    <path d="M 44.64605712890625 1.025833129882812 C 43.55759811401367 3.529380798339844 39.35693740844727 13.05084609985352 34.40329742431641 22.46563911437988 C 31.02078056335449 28.89436912536621 27.9499397277832 34.02397918701172 25.27606010437012 37.71197891235352 C 23.66282081604004 39.93708801269531 22.16835975646973 41.66783142089844 20.83420944213867 42.85612106323242 C 19.21451950073242 44.29872894287109 17.788330078125 45 16.47414016723633 45 C 15.43001937866211 45 14.47014999389648 44.55688858032227 13.62120819091797 43.68296813964844 C 10.79621124267578 40.77487182617188 8.996791839599609 32.49678039550781 8.272911071777344 19.07863998413086 C 7.848670959472656 11.21461868286133 7.926422119140625 3.787933349609375 7.976398468017578 1.065174102783203 C 4.046863555908203 1.569316864013672 1 4.935569763183594 1 9 L 1 44 C 1 48.41120910644531 4.588790893554688 52 9 52 L 44 52 C 48.41120910644531 52 52 48.41120910644531 52 44 L 52 9 C 52 4.80633544921875 48.75621032714844 1.355953216552734 44.64605712890625 1.025833129882812 M 9 0 C 9 0 7.724140167236328 44 16.47414016723633 44 C 25.22414016723633 44 44 0 44 0 C 48.97055816650391 0 53 4.029441833496094 53 9 L 53 44 C 53 48.97055816650391 48.97055816650391 53 44 53 L 9 53 C 4.029441833496094 53 0 48.97055816650391 0 44 L 0 9 C 0 4.029441833496094 3.134010314941406 0 7 0 Z" stroke="none" fill="#e846ff"/>
+                </g>
+                <g id="Rectangle_2" data-name="Rectangle 2" transform="translate(135 21)" fill="#cd00e3" stroke="#e846ff" stroke-width="1">
+                    <rect width="21" height="109" rx="10" stroke="none"/>
+                    <rect x="0.5" y="0.5" width="20" height="108" rx="9.5" fill="none"/>
+                </g>
+                <g id="Path_4" data-name="Path 4" transform="translate(170.947 53.994) rotate(-34)" fill="#cd00e3">
+                    <path d="M 8 61.5 L 7 61.5 C 3.415889978408813 61.5 0.5 58.58411026000977 0.5 55 L 0.5 7 C 0.5 3.415889978408813 3.415889978408813 0.5 7 0.5 L 8 0.5 C 11.58411026000977 0.5 14.5 3.415889978408813 14.5 7 L 14.5 55 C 14.5 58.58411026000977 11.58411026000977 61.5 8 61.5 Z" stroke="none"/>
+                    <path d="M 7 1 C 3.691590309143066 1 1 3.69158935546875 1 7 L 1 55 C 1 58.30841064453125 3.691590309143066 61 7 61 L 8 61 C 11.30840969085693 61 14 58.30841064433594 14 55 L 14 7 C 14 3.69158935546875 11.30840969085693 1 8 1 L 7 1 M 7 0 L 8 0 C 11.86598968505859 0 15 3.134010314941406 15 7 L 15 55 C 15 58.86598968505859 11.86598968505859 62 8 62 L 7 62 C 3.134010314941406 62 0 58.86598968505859 0 55 L 0 7 C 0 3.134010314941406 3.134010314941406 0 7 0 Z" stroke="none" fill="#e846ff"/>
+                </g>
+                <g id="Rectangle_4" data-name="Rectangle 4" transform="translate(211.67 49) rotate(45)" fill="#cd00e3" stroke="#e846ff" stroke-width="1">
+                    <rect width="15" height="62" rx="7" stroke="none"/>
+                    <rect x="0.5" y="0.5" width="14" height="61" rx="6.5" fill="none"/>
+                </g>
+                <g id="Path_3" data-name="Path 3" transform="translate(45 108)" fill="#cd00e3">
+                    <path d="M 39 21.49999618530273 L 6 21.49999618530273 C 2.967289924621582 21.49999618530273 0.5 19.03270721435547 0.5 15.99999618530273 L 0.5 -4.049997329711914 C 0.5686241984367371 -3.938495635986328 0.6374394297599792 -3.825043439865112 0.7022500038146973 -3.718193292617798 C 1.72107994556427 -2.038453340530396 3.260760068893433 0.4999966323375702 5.405210018157959 0.4999966323375702 L 39 0.4999966323375702 C 42.03271102905273 0.4999966323375702 44.5 2.967286586761475 44.5 5.999996662139893 L 44.5 15.99999618530273 C 44.5 19.03270721435547 42.03271102905273 21.49999618530273 39 21.49999618530273 Z" stroke="none"/>
+                    <path d="M 1 -2.296527862548828 L 1 15.99999618530273 C 1 18.75700759887695 3.242988586425781 20.99999618530273 6 20.99999618530273 L 39 20.99999618530273 C 41.75701141357422 20.99999618530273 44 18.75700759887695 44 15.99999618530273 L 44 5.999996185302734 C 44 3.242986679077148 41.75701141357422 0.9999961853027344 39 0.9999961853027344 L 5.405208587646484 0.9999961853027344 C 3.471275329589844 0.9999961853027344 2.044700622558594 -0.7052974700927734 1 -2.296527862548828 M 0.1917915344238281 -5.217250823974609 C 0.7787246704101562 -5.217250823974609 2.678031921386719 -3.814697265625e-06 5.405208587646484 -3.814697265625e-06 L 39 -3.814697265625e-06 C 42.3137092590332 -3.814697265625e-06 45 2.686286926269531 45 5.999996185302734 L 45 15.99999618530273 C 45 19.31370544433594 42.3137092590332 21.99999618530273 39 21.99999618530273 L 6 21.99999618530273 C 2.686290740966797 21.99999618530273 0 19.31370544433594 0 15.99999618530273 L 0 -4.389293670654297 C 0 -4.975826263427734 0.06555938720703125 -5.217250823974609 0.1917915344238281 -5.217250823974609 Z" stroke="none" fill="#e846ff"/>
+                </g>
+            </g>
+        </svg>
+        <span>Luix's Anime Tion</span>
+    </div>
+    
+    <div id="tools-container">
+        <button id="brushTool" class="active">🖌️</button>
+        <button id="lineTool">➖</button>
+        <button id="rectTool">⬛</button>
+        <button id="squareTool">◼️</button>
+        <button id="circleTool">⚫</button>
+        <button id="selectTool">👆</button>
+    </div>
+
+    <div class="menu-controls">
+        <label>🎨 <input type="color" id="colorPicker" value="#000000"></label>
+        <label>🖌️ <input type="number" id="brushSize" min="1" max="100" value="3" step="1"></label>
+        <button id="undoBtn">↩️</button>
+        <button id="redoBtn">↪️</button>
+        <button id="clearBtn">🧹</button>
+        <button id="saveImgBtn">💾</button>
+        <button id="saveJsonBtn">📁</button>
+        <button id="loadJsonBtn">📂</button>
+    </div>
+    <input type="file" id="jsonFileInput" accept=".json">
+</div>
+
+<div id="canvas-container">
+    <canvas id="main-canvas" class="tool-brush"></canvas>
+    <div class="zoom-info" id="zoomInfo">Zoom: 100%</div>
+</div>
+
+<div id="timeline">
+    <div class="timeline-controls">
+        <button id="addFrameBtn">➕</button>
+        <button id="prevFrameBtn">⬅️</button>
+        <button id="nextFrameBtn">➡️</button>
+        <button id="playBtn">▶️</button>
+    </div>
+    <div id="frame-selector"></div>
+</div>
+
+<script>
+    const menu = document.getElementById('menu');
+    const canvasContainer = document.getElementById('canvas-container');
+    const timeline = document.getElementById('timeline');
+    const canvas = document.getElementById("main-canvas");
+    const ctx = canvas.getContext("2d");
+    const colorPicker = document.getElementById("colorPicker");
+    const brushSize = document.getElementById("brushSize");
+    const undoBtn = document.getElementById("undoBtn");
+    const redoBtn = document.getElementById("redoBtn");
+    const clearBtn = document.getElementById("clearBtn");
+    const saveImgBtn = document.getElementById("saveImgBtn");
+    const saveJsonBtn = document.getElementById("saveJsonBtn");
+    const loadJsonBtn = document.getElementById("loadJsonBtn");
+    const jsonFileInput = document.getElementById("jsonFileInput");
+    const addFrameBtn = document.getElementById('addFrameBtn');
+    const prevFrameBtn = document.getElementById('prevFrameBtn');
+    const nextFrameBtn = document.getElementById('nextFrameBtn');
+    const playBtn = document.getElementById('playBtn');
+    const frameSelector = document.getElementById('frame-selector');
+    const zoomInfo = document.getElementById('zoomInfo');
+    const toolsContainer = document.getElementById('tools-container');
+    const brushTool = document.getElementById('brushTool');
+    const lineTool = document.getElementById('lineTool');
+    const rectTool = document.getElementById('rectTool');
+    const squareTool = document.getElementById('squareTool');
+    const circleTool = document.getElementById('circleTool');
+    const selectTool = document.getElementById('selectTool');
+    
+    const canvasWidth = 800;
+    const canvasHeight = 600;
+    canvas.width = canvasWidth;
+    canvas.height = canvasHeight;
+
+    let frames = [{ shapes: [] }];
+    let currentFrameIndex = 0;
+    let drawing = false;
+    let startX = 0;
+    let startY = 0;
+    let currentTool = 'brush';
+    let selectedShape = null;
+    let selectedShapeIndex = -1;
+    let isDragging = false;
+    let isResizing = false;
+    let resizeHandle = null;
+
+    let zoom = 1;
+    let panX = 0;
+    let panY = 0;
+    let isPanning = false;
+    let startPanX = 0;
+    let startPanY = 0;
+    let lastPinchDist = 0;
+    const MIN_ZOOM = 0.1;
+    const MAX_ZOOM = 5;
+
+    function saveProjectToLocalStorage() {
+        const projectData = {
+            frames: frames,
+            zoom: zoom,
+            panX: panX,
+            panY: panY
+        };
+        localStorage.setItem('animationProject', JSON.stringify(projectData));
+    }
+    
+    function loadProjectFromLocalStorage() {
+        const savedData = localStorage.getItem('animationProject');
+        if (savedData) {
+            const projectData = JSON.parse(savedData);
+            frames = projectData.frames || [{ shapes: [] }];
+            zoom = projectData.zoom || 1;
+            panX = projectData.panX || 0;
+            panY = projectData.panY || 0;
+        } else {
+            frames = [{ shapes: [] }];
+        }
+        currentFrameIndex = 0;
+        switchFrame(0, false);
+        updateThumbnails();
+    }
+
+    function drawAll() {
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        ctx.fillStyle = "white";
+        ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+        
+        const currentFrame = frames[currentFrameIndex];
+        if (!currentFrame) return;
+
+        for (let i = 0; i < currentFrame.shapes.length; i++) {
+            const shape = currentFrame.shapes[i];
+            ctx.strokeStyle = shape.color;
+            ctx.lineWidth = shape.size;
+            ctx.fillStyle = shape.color;
+            ctx.lineCap = "round";
+            ctx.lineJoin = "round";
+
+            switch (shape.type) {
+                case 'brush':
+                    ctx.beginPath();
+                    if (shape.points.length > 0) {
+                        ctx.moveTo(shape.points[0].x, shape.points[0].y);
+                        for (let j = 1; j < shape.points.length; j++) {
+                            ctx.lineTo(shape.points[j].x, shape.points[j].y);
+                        }
+                    }
+                    ctx.stroke();
+                    break;
+                case 'line':
+                    ctx.beginPath();
+                    ctx.moveTo(shape.x1, shape.y1);
+                    ctx.lineTo(shape.x2, shape.y2);
+                    ctx.stroke();
+                    break;
+                case 'rect':
+                case 'square':
+                    ctx.beginPath();
+                    ctx.rect(shape.x, shape.y, shape.width, shape.height);
+                    ctx.stroke();
+                    break;
+                case 'circle':
+                    ctx.beginPath();
+                    ctx.arc(shape.x, shape.y, shape.radius, 0, 2 * Math.PI);
+                    ctx.stroke();
+                    break;
+            }
+        }
+        
+        drawSelectionBox();
+        updateCanvasTransform();
+        updateZoomInfo();
+    }
+
+    function getShapeBounds(shape) {
+        switch(shape.type) {
+            case 'brush':
+                const minX = Math.min(...shape.points.map(p => p.x));
+                const minY = Math.min(...shape.points.map(p => p.y));
+                const maxX = Math.max(...shape.points.map(p => p.x));
+                const maxY = Math.max(...shape.points.map(p => p.y));
+                return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+            case 'line':
+                return { 
+                    x: Math.min(shape.x1, shape.x2), 
+                    y: Math.min(shape.y1, shape.y2), 
+                    width: Math.abs(shape.x1 - shape.x2), 
+                    height: Math.abs(shape.y1 - shape.y2) 
+                };
+            case 'rect':
+            case 'square':
+                return { x: shape.x, y: shape.y, width: shape.width, height: shape.height };
+            case 'circle':
+                return { x: shape.x - shape.radius, y: shape.y - shape.radius, width: shape.radius * 2, height: shape.radius * 2 };
+        }
+    }
+
+    function drawSelectionBox() {
+        const selectBox = document.querySelector('.select-box');
+        const handles = document.querySelectorAll('.select-handle');
+        
+        if (!selectedShape) {
+            if (selectBox) selectBox.remove();
+            handles.forEach(h => h.remove());
+            return;
+        }
+
+        const bounds = getShapeBounds(selectedShape);
+        const containerRect = canvasContainer.getBoundingClientRect();
+
+        let box = selectBox;
+        if (!box) {
+            box = document.createElement('div');
+            box.className = 'select-box';
+            canvasContainer.appendChild(box);
+        }
+
+        box.style.left = `${containerRect.left + (bounds.x * zoom + panX)}px`;
+        box.style.top = `${containerRect.top + (bounds.y * zoom + panY)}px`;
+        box.style.width = `${bounds.width * zoom}px`;
+        box.style.height = `${bounds.height * zoom}px`;
+
+        const handlePositions = [
+            { x: bounds.x, y: bounds.y },
+            { x: bounds.x + bounds.width, y: bounds.y },
+            { x: bounds.x + bounds.width, y: bounds.y + bounds.height },
+            { x: bounds.x, y: bounds.y + bounds.height }
+        ];
+
+        handles.forEach(h => h.remove());
+        handlePositions.forEach((pos, index) => {
+            const handle = document.createElement('div');
+            handle.className = `select-handle corner`;
+            handle.style.left = `${containerRect.left + (pos.x * zoom + panX) - 5}px`;
+            handle.style.top = `${containerRect.top + (pos.y * zoom + panY) - 5}px`;
+            handle.dataset.index = index;
+            canvasContainer.appendChild(handle);
+        });
+    }
+
+    function updateCanvasTransform() {
+        canvas.style.transform = `translate(${panX}px, ${panY}px) scale(${zoom})`;
+        drawSelectionBox();
+    }
+
+    function updateZoomInfo() {
+        zoomInfo.textContent = `Zoom: ${(zoom * 100).toFixed(0)}%`;
+    }
+
+    function getCanvasPos(e) {
+        const rect = canvas.getBoundingClientRect();
+        return {
+            x: (e.clientX - rect.left) / zoom,
+            y: (e.clientY - rect.top) / zoom
+        };
+    }
+    
+    function getCanvasCoordsFromClient(clientX, clientY) {
+        const rect = canvas.getBoundingClientRect();
+        return {
+            x: (clientX - rect.left) / zoom,
+            y: (clientY - rect.top) / zoom
+        };
+    }
+
+    function switchFrame(index, copyPrevious = true) {
+        selectedShape = null;
+        selectedShapeIndex = -1;
+        currentFrameIndex = index;
+        if (copyPrevious && currentFrameIndex > 0) {
+            const previousFrame = frames[currentFrameIndex - 1];
+            frames[currentFrameIndex].shapes = JSON.parse(JSON.stringify(previousFrame.shapes));
+        }
+        drawAll();
+        updateThumbnails();
+        saveProjectToLocalStorage();
+    }
+
+    function updateThumbnails() {
+        frameSelector.innerHTML = '';
+        frames.forEach((frame, index) => {
+            const container = document.createElement('div');
+            container.className = 'frame-thumbnail-container';
+            if (index === currentFrameIndex) {
+                container.classList.add('active');
+            }
+            container.dataset.index = index;
+            
+            const thumbCanvas = document.createElement('canvas');
+            const thumbCtx = thumbCanvas.getContext('2d');
+            thumbCanvas.className = 'frame-thumbnail';
+            thumbCanvas.width = 80;
+            thumbCanvas.height = 60;
+            
+            thumbCtx.fillStyle = "white";
+            thumbCtx.fillRect(0, 0, thumbCanvas.width, thumbCanvas.height);
+            
+            const scaleX = thumbCanvas.width / canvasWidth;
+            const scaleY = thumbCanvas.height / canvasHeight;
+            
+            for (let shape of frame.shapes) {
+                thumbCtx.strokeStyle = shape.color;
+                thumbCtx.lineWidth = shape.size * scaleX;
+                thumbCtx.lineCap = "round";
+                thumbCtx.lineJoin = "round";
+                
+                switch (shape.type) {
+                    case 'brush':
+                        thumbCtx.beginPath();
+                        if (shape.points.length > 0) {
+                            thumbCtx.moveTo(shape.points[0].x * scaleX, shape.points[0].y * scaleY);
+                            for (let i = 1; i < shape.points.length; i++) {
+                                thumbCtx.lineTo(shape.points[i].x * scaleX, shape.points[i].y * scaleY);
+                            }
+                        }
+                        thumbCtx.stroke();
+                        break;
+                    case 'line':
+                        thumbCtx.beginPath();
+                        thumbCtx.moveTo(shape.x1 * scaleX, shape.y1 * scaleY);
+                        thumbCtx.lineTo(shape.x2 * scaleX, shape.y2 * scaleY);
+                        thumbCtx.stroke();
+                        break;
+                    case 'rect':
+                    case 'square':
+                        thumbCtx.beginPath();
+                        thumbCtx.rect(shape.x * scaleX, shape.y * scaleY, shape.width * scaleX, shape.height * scaleY);
+                        thumbCtx.stroke();
+                        break;
+                    case 'circle':
+                        thumbCtx.beginPath();
+                        thumbCtx.arc(shape.x * scaleX, shape.y * scaleY, shape.radius * scaleX, 0, 2 * Math.PI);
+                        thumbCtx.stroke();
+                        break;
+                }
+            }
+
+            const number = document.createElement('div');
+            number.className = 'frame-number';
+            number.textContent = index + 1;
+            
+            container.appendChild(thumbCanvas);
+            container.appendChild(number);
+            frameSelector.appendChild(container);
+
+            container.addEventListener('click', () => switchFrame(index));
+        });
+    }
+
+    // Canvas Mouse & Touch Handlers
+    canvas.addEventListener("mousedown", handleCanvasMouseDown);
+    canvas.addEventListener("mousemove", handleCanvasMouseMove);
+    canvas.addEventListener("mouseup", handleCanvasMouseUp);
+    canvas.addEventListener("mouseleave", handleCanvasMouseUp);
+    canvas.addEventListener("touchstart", handleCanvasTouchStart);
+    canvas.addEventListener("touchmove", handleCanvasTouchMove);
+    canvas.addEventListener("touchend", handleCanvasTouchEnd);
+
+    function handleCanvasMouseDown(e) {
+        const pos = getCanvasPos(e);
+        startX = pos.x;
+        startY = pos.y;
+        
+        if (currentTool === 'select') {
+            selectedShape = null;
+            selectedShapeIndex = -1;
+            for (let i = frames[currentFrameIndex].shapes.length - 1; i >= 0; i--) {
+                const shape = frames[currentFrameIndex].shapes[i];
+                if (isPointInShape(pos, shape)) {
+                    selectedShape = shape;
+                    selectedShapeIndex = i;
+                    isDragging = true;
+                    drawAll();
+                    break;
+                }
+            }
+        } else {
+            drawing = true;
+            let newShape = {
+                type: currentTool,
+                color: colorPicker.value,
+                size: parseFloat(brushSize.value),
+                undone: []
+            };
+
+            switch(currentTool) {
+                case 'brush':
+                    newShape.points = [{ x: startX, y: startY }];
+                    break;
+                case 'line':
+                    newShape.x1 = startX;
+                    newShape.y1 = startY;
+                    newShape.x2 = startX;
+                    newShape.y2 = startY;
+                    break;
+                case 'rect':
+                case 'square':
+                    newShape.x = startX;
+                    newShape.y = startY;
+                    newShape.width = 0;
+                    newShape.height = 0;
+                    break;
+                case 'circle':
+                    newShape.x = startX;
+                    newShape.y = startY;
+                    newShape.radius = 0;
+                    break;
+            }
+            frames[currentFrameIndex].shapes.push(newShape);
+        }
+    }
+
+    function handleCanvasMouseMove(e) {
+        const pos = getCanvasPos(e);
+        
+        if (drawing) {
+            const currentShape = frames[currentFrameIndex].shapes[frames[currentFrameIndex].shapes.length - 1];
+            switch(currentTool) {
+                case 'brush':
+                    currentShape.points.push(pos);
+                    break;
+                case 'line':
+                    currentShape.x2 = pos.x;
+                    currentShape.y2 = pos.y;
+                    break;
+                case 'rect':
+                case 'square':
+                    currentShape.width = pos.x - startX;
+                    currentShape.height = (currentTool === 'square') ? currentShape.width : pos.y - startY;
+                    currentShape.x = Math.min(startX, pos.x);
+                    currentShape.y = Math.min(startY, pos.y);
+                    if (currentTool === 'square') {
+                        const side = Math.max(Math.abs(pos.x - startX), Math.abs(pos.y - startY));
+                        currentShape.width = pos.x > startX ? side : -side;
+                        currentShape.height = pos.y > startY ? side : -side;
+                        currentShape.x = pos.x > startX ? startX : startX - side;
+                        currentShape.y = pos.y > startY ? startY : startY - side;
+                    } else {
+                        currentShape.width = pos.x - startX;
+                        currentShape.height = pos.y - startY;
+                    }
+                    break;
+                case 'circle':
+                    currentShape.radius = Math.hypot(pos.x - startX, pos.y - startY);
+                    break;
+            }
+            drawAll();
+        } else if (isDragging) {
+            const dx = pos.x - startX;
+            const dy = pos.y - startY;
+            if (selectedShape) {
+                if (selectedShape.type === 'brush') {
+                    selectedShape.points = selectedShape.points.map(p => ({ x: p.x + dx, y: p.y + dy }));
+                } else if (selectedShape.type === 'line') {
+                    selectedShape.x1 += dx;
+                    selectedShape.y1 += dy;
+                    selectedShape.x2 += dx;
+                    selectedShape.y2 += dy;
+                } else if (selectedShape.type === 'rect' || selectedShape.type === 'square' || selectedShape.type === 'circle') {
+                    selectedShape.x += dx;
+                    selectedShape.y += dy;
+                }
+                drawAll();
+                startX = pos.x;
+                startY = pos.y;
+            }
+        } else if (isResizing) {
+            const dx = pos.x - startX;
+            const dy = pos.y - startY;
+            const shape = selectedShape;
+
+            if (shape) {
+                const oldBounds = getShapeBounds(shape);
+                let newX, newY, newWidth, newHeight, newRadius;
+                
+                switch(resizeHandle) {
+                    case 0: // Top-left
+                        newX = oldBounds.x + dx;
+                        newY = oldBounds.y + dy;
+                        newWidth = oldBounds.width - dx;
+                        newHeight = oldBounds.height - dy;
+                        break;
+                    case 1: // Top-right
+                        newX = oldBounds.x;
+                        newY = oldBounds.y + dy;
+                        newWidth = oldBounds.width + dx;
+                        newHeight = oldBounds.height - dy;
+                        break;
+                    case 2: // Bottom-right
+                        newX = oldBounds.x;
+                        newY = oldBounds.y;
+                        newWidth = oldBounds.width + dx;
+                        newHeight = oldBounds.height + dy;
+                        break;
+                    case 3: // Bottom-left
+                        newX = oldBounds.x + dx;
+                        newY = oldBounds.y;
+                        newWidth = oldBounds.width - dx;
+                        newHeight = oldBounds.height + dy;
+                        break;
+                }
+                
+                if (shape.type === 'rect' || shape.type === 'square') {
+                    shape.x = newX;
+                    shape.y = newY;
+                    shape.width = newWidth;
+                    shape.height = newHeight;
+
+                    if (shape.type === 'square') {
+                        const side = Math.max(Math.abs(shape.width), Math.abs(shape.height));
+                        shape.width = side * (shape.width < 0 ? -1 : 1);
+                        shape.height = side * (shape.height < 0 ? -1 : 1);
+                        shape.x = oldBounds.x + (oldBounds.width - shape.width) / 2;
+                        shape.y = oldBounds.y + (oldBounds.height - shape.height) / 2;
+                    }
+                } else if (shape.type === 'circle') {
+                    const newRadiusFromHandle = Math.hypot(newWidth / 2, newHeight / 2);
+                    shape.radius = newRadiusFromHandle;
+                    shape.x = oldBounds.x + oldBounds.width / 2;
+                    shape.y = oldBounds.y + oldBounds.height / 2;
+                }
+                drawAll();
+                startX = pos.x;
+                startY = pos.y;
+            }
+        }
+    }
+
+    function handleCanvasMouseUp() {
+        if (drawing || isDragging || isResizing) {
+            drawing = false;
+            isDragging = false;
+            isResizing = false;
+            saveProjectToLocalStorage();
+            updateThumbnails();
+        }
+    }
+
+    function handleCanvasTouchStart(e) {
+        if (e.touches.length === 1) {
+            handleCanvasMouseDown({
+                clientX: e.touches[0].clientX,
+                clientY: e.touches[0].clientY
+            });
+        }
+    }
+
+    function handleCanvasTouchMove(e) {
+        if (e.touches.length === 1) {
+            handleCanvasMouseMove({
+                clientX: e.touches[0].clientX,
+                clientY: e.touches[0].clientY
+            });
+        }
+    }
+
+    function handleCanvasTouchEnd() {
+        handleCanvasMouseUp();
+    }
+
+    function isPointInShape(point, shape) {
+        const threshold = 10;
+        switch (shape.type) {
+            case 'brush':
+                return shape.points.some(p => Math.hypot(p.x - point.x, p.y - point.y) < threshold);
+            case 'line':
+                const distToLine = Math.abs((shape.y2 - shape.y1) * point.x - (shape.x2 - shape.x1) * point.y + shape.x2 * shape.y1 - shape.y2 * shape.x1) / Math.hypot(shape.y2 - shape.y1, shape.x2 - shape.x1);
+                const isWithinBounds = Math.min(shape.x1, shape.x2) <= point.x && point.x <= Math.max(shape.x1, shape.x2) &&
+                                       Math.min(shape.y1, shape.y2) <= point.y && point.y <= Math.max(shape.y1, shape.y2);
+                return distToLine < threshold && isWithinBounds;
+            case 'rect':
+            case 'square':
+                const rectX = Math.min(shape.x, shape.x + shape.width);
+                const rectY = Math.min(shape.y, shape.y + shape.height);
+                const rectWidth = Math.abs(shape.width);
+                const rectHeight = Math.abs(shape.height);
+                return point.x >= rectX && point.x <= rectX + rectWidth &&
+                       point.y >= rectY && point.y <= rectY + rectHeight;
+            case 'circle':
+                return Math.hypot(point.x - shape.x, point.y - shape.y) <= shape.radius;
+        }
+        return false;
+    }
+
+    // Zoom and Pan on the container
+    canvasContainer.addEventListener("mousedown", (e) => {
+        if (e.target.id === 'main-canvas' && currentTool !== 'select') return;
+        if (e.target.className === 'select-handle corner') return;
+
+        isPanning = true;
+        canvasContainer.classList.add('panning');
+        startPanX = e.clientX - panX;
+        startPanY = e.clientY - panY;
+    });
+
+    canvasContainer.addEventListener("mousemove", (e) => {
+        if (isPanning) {
+            panX = e.clientX - startPanX;
+            panY = e.clientY - startPanY;
+            updateCanvasTransform();
+        }
+    });
+
+    canvasContainer.addEventListener("mouseup", () => {
+        isPanning = false;
+        canvasContainer.classList.remove('panning');
+        saveProjectToLocalStorage();
+    });
+
+    canvasContainer.addEventListener("mouseleave", () => {
+        isPanning = false;
+        canvasContainer.classList.remove('panning');
+    });
+
+    canvasContainer.addEventListener("wheel", (e) => {
+        e.preventDefault();
+        const rect = canvas.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+
+        const newZoom = zoom * (1 + (e.deltaY < 0 ? 0.1 : -0.1));
+        const limitedZoom = Math.max(MIN_ZOOM, Math.min(newZoom, MAX_ZOOM));
+        const zoomRatio = limitedZoom / zoom;
+        
+        panX += (mouseX - canvasWidth / 2) * (1 - zoomRatio);
+        panY += (mouseY - canvasHeight / 2) * (1 - zoomRatio);
+        zoom = limitedZoom;
+        
+        updateCanvasTransform();
+        updateZoomInfo();
+        saveProjectToLocalStorage();
+    });
+
+    canvasContainer.addEventListener("touchstart", (e) => {
+        if (e.touches.length === 2) {
+            e.preventDefault();
+            isPanning = true;
+            lastPinchDist = Math.hypot(e.touches[1].clientX - e.touches[0].clientX, e.touches[1].clientY - e.touches[0].clientY);
+            startPanX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - panX;
+            startPanY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - panY;
+        } else if (e.touches.length === 1 && currentTool !== 'select') {
+             // Handle single-touch panning when a tool is selected
+            isPanning = true;
+            startPanX = e.touches[0].clientX - panX;
+            startPanY = e.touches[0].clientY - panY;
+        }
+    });
+
+    canvasContainer.addEventListener("touchmove", (e) => {
+        if (e.touches.length === 2) {
+            e.preventDefault();
+            const newDist = Math.hypot(e.touches[1].clientX - e.touches[0].clientX, e.touches[1].clientY - e.touches[0].clientY);
+            const newZoom = zoom * (newDist / lastPinchDist);
+            const limitedZoom = Math.max(MIN_ZOOM, Math.min(newZoom, MAX_ZOOM));
+            
+            const pinchCenter = {
+                x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+                y: (e.touches[0].clientY + e.touches[1].clientY) / 2
+            };
+
+            const rect = canvas.getBoundingClientRect();
+            const canvasPinchX = pinchCenter.x - rect.left;
+            const canvasPinchY = pinchCenter.y - rect.top;
+
+            const zoomRatio = limitedZoom / zoom;
+            panX += (canvasPinchX - canvasWidth / 2) * (1 - zoomRatio);
+            panY += (canvasPinchY - canvasHeight / 2) * (1 - zoomRatio);
+            zoom = limitedZoom;
+            
+            updateCanvasTransform();
+            updateZoomInfo();
+            
+            lastPinchDist = newDist;
+            startPanX = pinchCenter.x - panX;
+            startPanY = pinchCenter.y - panY;
+
+        } else if (e.touches.length === 1 && isPanning) {
+            panX = e.touches[0].clientX - startPanX;
+            panY = e.touches[0].clientY - startPanY;
+            updateCanvasTransform();
+        }
+    });
+
+    canvasContainer.addEventListener("touchend", () => {
+        isPanning = false;
+        saveProjectToLocalStorage();
+    });
+
+    // Tool Buttons
+    toolsContainer.addEventListener('click', (e) => {
+        if (e.target.tagName === 'BUTTON') {
+            document.querySelectorAll('#tools-container button').forEach(btn => btn.classList.remove('active'));
+            e.target.classList.add('active');
+            currentTool = e.target.id.replace('Tool', '');
+            canvas.className = `tool-${currentTool}`;
+            selectedShape = null;
+            selectedShapeIndex = -1;
+            drawAll();
+        }
+    });
+    
+    // Select handles handlers
+    canvasContainer.addEventListener('mousedown', (e) => {
+        if (e.target.classList.contains('select-handle')) {
+            isResizing = true;
+            resizeHandle = parseInt(e.target.dataset.index);
+            const pos = getCanvasPos({ clientX: e.clientX, clientY: e.clientY });
+            startX = pos.x;
+            startY = pos.y;
+            e.preventDefault();
+        }
+    });
+    
+    // Keyboard events
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Delete' || e.key === 'Backspace') {
+            if (selectedShape) {
+                frames[currentFrameIndex].shapes.splice(selectedShapeIndex, 1);
+                selectedShape = null;
+                selectedShapeIndex = -1;
+                drawAll();
+                saveProjectToLocalStorage();
+                updateThumbnails();
+            }
+        }
+    });
+
+    // Button handlers
+    clearBtn.addEventListener("click", () => {
+        frames[currentFrameIndex].shapes = [];
+        frames[currentFrameIndex].undone = [];
+        selectedShape = null;
+        selectedShapeIndex = -1;
+        drawAll();
+        saveProjectToLocalStorage();
+        updateThumbnails();
+    });
+
+    saveImgBtn.addEventListener("click", () => {
+        const link = document.createElement('a');
+        link.download = `frame_${currentFrameIndex + 1}.png`;
+        link.href = canvas.toDataURL();
+        link.click();
+    });
+
+    saveJsonBtn.addEventListener("click", () => {
+        const data = {
+            frames: frames,
+            zoom: zoom,
+            panX: panX,
+            panY: panY
+        };
+        const json = JSON.stringify(data);
+        const blob = new Blob([json], {type: "application/json"});
+        const url = URL.createObjectURL(blob);
+        
+        const link = document.createElement('a');
+        link.download = 'animation.json';
+        link.href = url;
+        link.click();
+        
+        setTimeout(() => URL.revokeObjectURL(url), 100);
+    });
+
+    loadJsonBtn.addEventListener("click", () => {
+        jsonFileInput.click();
+    });
+
+    jsonFileInput.addEventListener("change", (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            try {
+                const data = JSON.parse(event.target.result);
+                frames = data.frames || [];
+                zoom = data.zoom || 1;
+                panX = data.panX || 0;
+                panY = data.panY || 0;
+                
+                if (frames.length === 0) {
+                    frames.push({ shapes: [] });
+                }
+                currentFrameIndex = 0;
+                switchFrame(0, false);
+                updateCanvasTransform();
+                updateZoomInfo();
+                saveProjectToLocalStorage();
+                
+            } catch (err) {
+                alert("Error loading file: " + err.message);
+            }
+        };
+        reader.readAsText(file);
+        jsonFileInput.value = '';
+    });
+
+    undoBtn.addEventListener("click", () => {
+        const frame = frames[currentFrameIndex];
+        if (frame.shapes.length > 0) {
+            const undoneShape = frame.shapes.pop();
+            if (!frame.undone) frame.undone = [];
+            frame.undone.push(undoneShape);
+            selectedShape = null;
+            selectedShapeIndex = -1;
+            drawAll();
+            saveProjectToLocalStorage();
+            updateThumbnails();
+        }
+    });
+
+    redoBtn.addEventListener("click", () => {
+        const frame = frames[currentFrameIndex];
+        if (frame.undone && frame.undone.length > 0) {
+            const redoneShape = frame.undone.pop();
+            frame.shapes.push(redoneShape);
+            drawAll();
+            saveProjectToLocalStorage();
+            updateThumbnails();
+        }
+    });
+
+    addFrameBtn.addEventListener('click', () => {
+        frames.splice(currentFrameIndex + 1, 0, { shapes: [] });
+        switchFrame(currentFrameIndex + 1, true);
+    });
+
+    prevFrameBtn.addEventListener('click', () => {
+        if (currentFrameIndex > 0) {
+            switchFrame(currentFrameIndex - 1, false);
+        }
+    });
+
+    nextFrameBtn.addEventListener('click', () => {
+        if (currentFrameIndex < frames.length - 1) {
+            switchFrame(currentFrameIndex + 1, false);
+        }
+    });
+    
+    // Play Animation
+    let isPlaying = false;
+    let playInterval;
+
+    function playAnimation() {
+        if (isPlaying) {
+            clearInterval(playInterval);
+            isPlaying = false;
+            playBtn.textContent = '▶️';
+        } else {
+            isPlaying = true;
+            playBtn.textContent = '⏸️';
+            let frameCounter = currentFrameIndex;
+            playInterval = setInterval(() => {
+                frameCounter++;
+                if (frameCounter >= frames.length) {
+                    frameCounter = 0;
+                }
+                switchFrame(frameCounter, false);
+            }, 100);
+        }
+    }
+    
+    playBtn.addEventListener('click', playAnimation);
+
+    // Initial load
+    loadProjectFromLocalStorage();
+    window.addEventListener('resize', () => {
+        updateCanvasTransform();
+    });
+</script>
+</body>
+</html>
