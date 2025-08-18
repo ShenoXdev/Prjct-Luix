@@ -24,13 +24,13 @@
 
         /* General Layout */
         .header {
-            color: var(--primary-color); /* The text color is now purple */
+            color: var(--primary-color);
             padding: 10px 20px;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            border: 2px solid var(--border-color);
             margin: 10px;
+            /* Removed the border from the header */
         }
 
         .content {
@@ -55,7 +55,7 @@
         
         /* Navigation Menu */
         .nav-menu .nav-item {
-            color: var(--primary-color); /* Navigation links are now purple */
+            color: var(--primary-color);
             text-decoration: none;
             padding: 5px 10px;
             border-radius: 5px;
@@ -63,7 +63,7 @@
         }
 
         .nav-menu .nav-item.active {
-            background-color: rgba(255, 0, 255, 0.1); /* Lighter purple background for active link */
+            background-color: rgba(255, 0, 255, 0.1);
         }
 
         .nav-menu .nav-item:hover {
@@ -72,17 +72,20 @@
 
         /* Endless Drawing Button */
         .endless-drawing-btn {
-            background-color: var(--primary-color); /* Button background remains purple */
+            background-color: var(--primary-color);
             color: var(--background-color);
             padding: 8px 15px;
             border-radius: 5px;
             text-decoration: none;
             font-weight: bold;
-            border: 1px solid var(--primary-color); /* Border color is now purple */
+            border: 1px solid var(--primary-color);
+            /* Increased padding for better visibility of the text */
+            padding-left: 20px;
+            padding-right: 20px;
         }
 
         .endless-drawing-btn:hover {
-            background-color: #cc00cc; /* Darker shade on hover */
+            background-color: #cc00cc;
         }
 
         /* Welcome Section */
@@ -93,7 +96,7 @@
         }
 
         .welcome-section p {
-            color: var(--primary-color); /* All text in the middle is now purple */
+            color: var(--primary-color);
             font-size: 18px;
             line-height: 1.6;
         }
@@ -116,7 +119,7 @@
 
             .endless-drawing-btn {
                 margin-top: 10px;
-                display: block; /* Button takes full width on mobile */
+                display: block;
             }
 
             .welcome-section h1 {
