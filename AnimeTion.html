@@ -6,7 +6,6 @@
     <title>موقع أنيميشن متقدم</title>
     
     <style>
-        /* تنسيقات أساسية */
         :root {
             --bg-color: #2c3e50;
             --main-color: #34495e;
@@ -32,7 +31,6 @@
             flex-grow: 1;
         }
 
-        /* شريط الأدوات الجانبي */
         .sidebar {
             width: 200px;
             background-color: var(--main-color);
@@ -73,7 +71,6 @@
             transform: translateY(-2px);
         }
 
-        /* حقول الأدوات */
         .controls-group {
             display: flex;
             flex-direction: column;
@@ -88,7 +85,6 @@
             width: 100%;
         }
 
-        /* مساحة الرسم (الكانفاس) */
         .canvas-container {
             flex-grow: 1;
             display: flex;
@@ -96,16 +92,18 @@
             align-items: center;
             background-color: var(--bg-color);
             overflow: hidden;
+            position: relative; /* لإضافة الزوم والتحريك */
         }
 
-        canvas {
+        #animationCanvas {
             background-color: white;
             border: 1px solid var(--border-color);
             box-shadow: 0 0 15px rgba(0, 0, 0, 0.3);
             touch-action: none;
+            cursor: crosshair;
+            transition: transform 0.2s ease-out; /* حركة سلسة للزوم */
         }
 
-        /* التايملاين والطبقات */
         .timeline {
             background-color: var(--main-color);
             padding: 10px;
@@ -220,35 +218,24 @@
     </footer>
 
     <script>
-        // تعريف المتغيرات والعناصر
         const canvas = document.getElementById('animationCanvas');
         const ctx = canvas.getContext('2d');
         const tools = document.querySelectorAll('.sidebar button');
         
-        // تعيين أبعاد الكانفاس
         canvas.width = 1200;
         canvas.height = 700;
 
-        // متغيرات حالة الرسم
         let currentTool = 'brush';
         let drawing = false;
         let startX, startY;
-        let currentZoom = 1;
-
-        // مصفوفة لتخزين بيانات الأنيميشن (إطارات، طبقات، أشكال)
-        let animationData = [{
-            layers: [[]]
-        }];
+        let animationData = [{ layers: [[]] }];
         let currentFrame = 0;
         let currentLayer = 0;
-        let history = []; // للتراجع والإعادة
+        let history = [];
         let historyIndex = -1;
 
-        // ===================================
-        // الوظائف الرئيسية
-        // ===================================
+        let currentShapePreview = null; // الشكل المؤقت اللي بيترسم
 
-        // وظيفة إعادة رسم الكانفاس
         function redrawCanvas() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             const frameData = animationData[currentFrame];
@@ -256,34 +243,41 @@
             frameData.layers.forEach(layer => {
                 layer.forEach(shape => {
                     if (shape) {
-                        ctx.beginPath();
-                        ctx.strokeStyle = shape.color;
-                        ctx.lineWidth = shape.width;
-                        
-                        // رسم الأشكال بناءً على نوعها
-                        if (shape.type === 'brush') {
-                            ctx.lineCap = 'round';
-                            for (let i = 0; i < shape.points.length - 1; i++) {
-                                ctx.moveTo(shape.points[i].x, shape.points[i].y);
-                                ctx.lineTo(shape.points[i+1].x, shape.points[i+1].y);
-                            }
-                            ctx.stroke();
-                        } else if (shape.type === 'line') {
-                            ctx.moveTo(shape.startX, shape.startY);
-                            ctx.lineTo(shape.endX, shape.endY);
-                            ctx.stroke();
-                        } else if (shape.type === 'rectangle') {
-                            ctx.strokeRect(shape.x, shape.y, shape.width, shape.height);
-                        } else if (shape.type === 'circle') {
-                            ctx.arc(shape.x, shape.y, shape.radius, 0, Math.PI * 2);
-                            ctx.stroke();
-                        }
+                        drawShape(shape);
                     }
                 });
             });
+
+            // رسم الشكل المؤقت
+            if (currentShapePreview) {
+                drawShape(currentShapePreview);
+            }
+        }
+        
+        function drawShape(shape) {
+            ctx.beginPath();
+            ctx.strokeStyle = shape.color;
+            ctx.lineWidth = shape.width;
+            
+            if (shape.type === 'brush') {
+                ctx.lineCap = 'round';
+                for (let i = 0; i < shape.points.length - 1; i++) {
+                    ctx.moveTo(shape.points[i].x, shape.points[i].y);
+                    ctx.lineTo(shape.points[i+1].x, shape.points[i+1].y);
+                }
+                ctx.stroke();
+            } else if (shape.type === 'line') {
+                ctx.moveTo(shape.startX, shape.startY);
+                ctx.lineTo(shape.endX, shape.endY);
+                ctx.stroke();
+            } else if (shape.type === 'rectangle') {
+                ctx.strokeRect(shape.x, shape.y, shape.width, shape.height);
+            } else if (shape.type === 'circle') {
+                ctx.arc(shape.x, shape.y, shape.radius, 0, Math.PI * 2);
+                ctx.stroke();
+            }
         }
 
-        // وظيفة حفظ حالة المشروع للتراجع
         function saveState() {
             if (historyIndex < history.length - 1) {
                 history = history.slice(0, historyIndex + 1);
@@ -301,26 +295,37 @@
         canvas.addEventListener('mousedown', (e) => {
             if (currentTool === 'zoom') return;
             drawing = true;
-            startX = e.offsetX / currentZoom;
-            startY = e.offsetY / currentZoom;
+            startX = e.offsetX;
+            startY = e.offsetY;
             
             if (currentTool === 'brush') {
-                const currentLayerData = animationData[currentFrame].layers[currentLayer];
-                currentLayerData.push({
+                currentShapePreview = {
                     type: 'brush',
                     points: [{ x: startX, y: startY }],
                     color: document.getElementById('color-picker').value,
                     width: document.getElementById('line-width').value
-                });
+                };
             }
         });
         
-        // التحرك أثناء الرسم (للفرشاة)
+        // التحرك أثناء الرسم (للفرشاة والأشكال الهندسية)
         canvas.addEventListener('mousemove', (e) => {
-            if (!drawing || currentTool !== 'brush') return;
-            const currentLayerData = animationData[currentFrame].layers[currentLayer];
-            const currentPath = currentLayerData[currentLayerData.length - 1];
-            currentPath.points.push({ x: e.offsetX / currentZoom, y: e.offsetY / currentZoom });
+            if (!drawing) return;
+            const mouseX = e.offsetX;
+            const mouseY = e.offsetY;
+            
+            if (currentTool === 'brush') {
+                currentShapePreview.points.push({ x: mouseX, y: mouseY });
+            } else if (currentTool === 'line') {
+                currentShapePreview = { type: 'line', startX, startY, endX: mouseX, endY: mouseY, color: document.getElementById('color-picker').value, width: document.getElementById('line-width').value };
+            } else if (currentTool === 'rect') {
+                const rectWidth = mouseX - startX;
+                const rectHeight = mouseY - startY;
+                currentShapePreview = { type: 'rectangle', x: startX, y: startY, width: rectWidth, height: rectHeight, color: document.getElementById('color-picker').value, width: document.getElementById('line-width').value };
+            } else if (currentTool === 'circle') {
+                const radius = Math.sqrt(Math.pow(mouseX - startX, 2) + Math.pow(mouseY - startY, 2));
+                currentShapePreview = { type: 'circle', x: startX, y: startY, radius, color: document.getElementById('color-picker').value, width: document.getElementById('line-width').value };
+            }
             redrawCanvas();
         });
 
@@ -328,39 +333,53 @@
         canvas.addEventListener('mouseup', (e) => {
             if (!drawing) return;
             drawing = false;
-
-            const endX = e.offsetX / currentZoom;
-            const endY = e.offsetY / currentZoom;
-            const currentLayerData = animationData[currentFrame].layers[currentLayer];
             
-            if (currentTool !== 'brush') {
-                let newShape;
-                const color = document.getElementById('color-picker').value;
-                const width = document.getElementById('line-width').value;
-                
-                if (currentTool === 'line') {
-                    newShape = { type: 'line', startX, startY, endX, endY, color, width };
-                } else if (currentTool === 'rect') {
-                    const rectWidth = endX - startX;
-                    const rectHeight = endY - startY;
-                    newShape = { type: 'rectangle', x: startX, y: startY, width: rectWidth, height: rectHeight, color, width };
-                } else if (currentTool === 'circle') {
-                    const radius = Math.sqrt(Math.pow(endX - startX, 2) + Math.pow(endY - startY, 2));
-                    newShape = { type: 'circle', x: startX, y: startY, radius, color, width };
-                }
-                if (newShape) {
-                    currentLayerData.push(newShape);
-                }
+            if (currentShapePreview) {
+                const currentLayerData = animationData[currentFrame].layers[currentLayer];
+                currentLayerData.push(currentShapePreview);
             }
+            currentShapePreview = null; // إزالة الشكل المؤقت
             saveState();
             redrawCanvas();
         });
         
         // ===================================
-        // وظائف الأدوات
+        // وظائف الزوم
+        // ===================================
+
+        document.getElementById('zoom-tool').addEventListener('click', () => {
+            currentTool = 'zoom';
+            tools.forEach(btn => btn.classList.remove('active'));
+            document.getElementById('zoom-tool').classList.add('active');
+        });
+
+        canvas.addEventListener('wheel', (e) => {
+            if (currentTool !== 'zoom') return;
+            e.preventDefault();
+            const delta = Math.sign(e.deltaY); // -1 for zoom in, 1 for zoom out
+            let newZoom = canvas.style.transform.match(/scale\((.*?)\)/);
+            if (newZoom) {
+                newZoom = parseFloat(newZoom[1]);
+            } else {
+                newZoom = 1;
+            }
+
+            if (delta < 0) {
+                newZoom += 0.1;
+            } else {
+                newZoom -= 0.1;
+            }
+
+            if (newZoom < 0.2) newZoom = 0.2;
+            if (newZoom > 5) newZoom = 5;
+
+            canvas.style.transform = `scale(${newZoom})`;
+        });
+        
+        // ===================================
+        // وظائف الأدوات الأخرى
         // ===================================
         
-        // اختيار الأدوات
         tools.forEach(button => {
             button.addEventListener('click', () => {
                 tools.forEach(btn => btn.classList.remove('active'));
@@ -369,7 +388,6 @@
             });
         });
 
-        // وظيفة التراجع والإعادة
         document.getElementById('undo-btn').addEventListener('click', () => {
             if (historyIndex > 0) {
                 historyIndex--;
@@ -386,14 +404,8 @@
             }
         });
 
-        // ===================================
-        // التحكم في الإطارات والطبقات
-        // ===================================
-
         document.getElementById('add-frame').addEventListener('click', () => {
-            const newFrame = {
-                layers: JSON.parse(JSON.stringify(animationData[currentFrame].layers))
-            };
+            const newFrame = { layers: JSON.parse(JSON.stringify(animationData[currentFrame].layers)) };
             animationData.splice(currentFrame + 1, 0, newFrame);
             currentFrame++;
             updateFrameInfo();
@@ -426,10 +438,6 @@
             }
         });
 
-        // ===================================
-        // وظائف التصدير والاستيراد
-        // ===================================
-
         document.getElementById('export-json').addEventListener('click', () => {
             const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(animationData));
             const downloadAnchorNode = document.createElement('a');
@@ -460,10 +468,6 @@
             alert('تصدير MP4 يتطلب مكتبة خارجية (مثل FFmpeg.js) وهو أمر معقد.');
         });
         
-        // ===================================
-        // تحديث الواجهة
-        // ===================================
-
         function updateFrameInfo() {
             document.getElementById('frame-info').textContent = `إطار ${currentFrame + 1} / ${animationData.length}`;
         }
@@ -487,7 +491,6 @@
             });
         }
 
-        // البدء
         redrawCanvas();
         updateFrameInfo();
         updateLayersList();
