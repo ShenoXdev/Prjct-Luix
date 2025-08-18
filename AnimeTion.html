@@ -71,7 +71,7 @@
             transform: translateY(-2px);
         }
         
-        #export-mp4 {
+        #export-webm {
             background-color: #e74c3c;
             color: white;
             font-weight: bold;
@@ -192,7 +192,7 @@
                     <button id="export-json">تصدير JSON</button>
                     <input type="file" id="import-json" accept=".json" style="display: none;">
                     <label for="import-json" class="sidebar-button" style="cursor: pointer; padding: 10px; border: 1px solid var(--border-color); border-radius: 5px; background-color: var(--bg-color); color: var(--secondary-color); text-align: center;">استيراد JSON</label>
-                    <button id="export-mp4">تصدير MP4</button>
+                    <button id="export-webm">تصدير WEBM</button>
                 </div>
             </div>
 
@@ -229,7 +229,7 @@
         const canvas = document.getElementById('animationCanvas');
         const ctx = canvas.getContext('2d');
         const tools = document.querySelectorAll('.sidebar button');
-        const exportMP4Button = document.getElementById('export-mp4');
+        const exportWebMButton = document.getElementById('export-webm');
         
         canvas.width = 1200;
         canvas.height = 700;
@@ -753,10 +753,10 @@
         });
         
         // ===================================
-        // نظام التصدير الجديد
+        // نظام التصدير المباشر لـ WebM
         // ===================================
 
-        exportMP4Button.addEventListener('click', () => {
+        exportWebMButton.addEventListener('click', () => {
             if (isRecording) {
                 stopRecording();
             } else {
@@ -765,7 +765,7 @@
         });
 
         function startRecording() {
-            const stream = canvas.captureStream(30);
+            const stream = canvas.captureStream(30); // 30 إطار في الثانية
             recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
             
             recorder.ondataavailable = e => {
@@ -775,17 +775,11 @@
             recorder.onstop = () => {
                 const blob = new Blob(chunks, { type: 'video/webm' });
                 const url = URL.createObjectURL(blob);
-                
-                // For a true MP4 file, an external tool is required for conversion.
-                // The provided code is a workaround to make the file download as .mp4
-                // but its actual internal format might be webm. This is a common
-                // browser limitation.
-                
                 const a = document.createElement('a');
                 document.body.appendChild(a);
                 a.style.display = 'none';
                 a.href = url;
-                a.download = 'animation.mp4'; // This line renames the file to .mp4
+                a.download = 'animation.webm';
                 a.click();
                 window.URL.revokeObjectURL(url);
             };
@@ -793,7 +787,7 @@
             chunks = [];
             recorder.start();
             isRecording = true;
-            exportMP4Button.textContent = 'إيقاف التصدير';
+            exportWebMButton.textContent = 'إيقاف التصدير';
             animateFrames();
         }
 
@@ -801,7 +795,7 @@
             if (recorder && isRecording) {
                 recorder.stop();
                 isRecording = false;
-                exportMP4Button.textContent = 'تصدير MP4';
+                exportWebMButton.textContent = 'تصدير WEBM';
             }
         }
         
