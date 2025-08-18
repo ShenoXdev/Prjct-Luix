@@ -101,6 +101,7 @@
             box-shadow: 0 0 15px rgba(0, 0, 0, 0.3);
             touch-action: none;
             cursor: crosshair;
+            transform-origin: 0 0;
         }
         
         #animationCanvas.select-mode {
@@ -164,9 +165,7 @@
             <div class="tool-section">
                 <h4>التحكم</h4>
                 <div class="tool-grid">
-                    <button id="select-tool">تحديد</button>
-                    <button id="zoom-tool">تكبير/تصغير</button>
-                </div>
+                    </div>
             </div>
 
             <div class="tool-section">
@@ -235,14 +234,19 @@
         let history = [];
         let historyIndex = -1;
 
-        let currentShapePreview = null; // الشكل المؤقت اللي بيترسم
-        let selectedShape = null; // الشكل المحدد
-        let isDragging = false;
-        let isResizing = false;
-        let isRotating = false;
+        let currentShapePreview = null;
+        let transform = {
+            scale: 1,
+            translateX: 0,
+            translateY: 0
+        };
 
         function redrawCanvas() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.save();
+            ctx.translate(transform.translateX, transform.translateY);
+            ctx.scale(transform.scale, transform.scale);
+
             const frameData = animationData[currentFrame];
             
             frameData.layers.forEach(layer => {
@@ -256,91 +260,30 @@
             if (currentShapePreview) {
                 drawShape(currentShapePreview);
             }
-
-            if (selectedShape) {
-                drawSelectionBox(selectedShape);
-            }
+            
+            ctx.restore();
         }
         
         function drawShape(shape) {
-            ctx.save();
             ctx.beginPath();
-            
-            // تطبيق التحويلات
-            ctx.translate(shape.x || shape.startX, shape.y || shape.startY);
-            ctx.rotate(shape.rotation || 0);
-            ctx.scale(shape.scaleX || 1, shape.scaleY || 1);
-            
             ctx.strokeStyle = shape.color;
             ctx.lineWidth = shape.width;
             
             if (shape.type === 'brush') {
                 ctx.lineCap = 'round';
                 for (let i = 0; i < shape.points.length - 1; i++) {
-                    ctx.moveTo(shape.points[i].x - (shape.x || 0), shape.points[i].y - (shape.y || 0));
-                    ctx.lineTo(shape.points[i+1].x - (shape.x || 0), shape.points[i+1].y - (shape.y || 0));
+                    ctx.moveTo(shape.points[i].x, shape.points[i].y);
+                    ctx.lineTo(shape.points[i+1].x, shape.points[i+1].y);
                 }
                 ctx.stroke();
             } else if (shape.type === 'line') {
-                ctx.moveTo(0, 0);
-                ctx.lineTo(shape.endX - shape.startX, shape.endY - shape.startY);
+                ctx.moveTo(shape.startX, shape.startY);
+                ctx.lineTo(shape.endX, shape.endY);
                 ctx.stroke();
             } else if (shape.type === 'circle') {
-                ctx.arc(0, 0, shape.radius, 0, Math.PI * 2);
+                ctx.arc(shape.x, shape.y, shape.radius, 0, Math.PI * 2);
                 ctx.stroke();
             }
-            ctx.restore();
-        }
-
-        function drawSelectionBox(shape) {
-            // كود رسم صندوق التحديد والمقابض
-            ctx.save();
-            ctx.translate(shape.x || shape.startX, shape.y || shape.startY);
-            ctx.rotate(shape.rotation || 0);
-            
-            ctx.strokeStyle = 'red';
-            ctx.setLineDash([5, 5]);
-            
-            let bounds;
-            if (shape.type === 'circle') {
-                bounds = {
-                    x: -shape.radius,
-                    y: -shape.radius,
-                    width: shape.radius * 2,
-                    height: shape.radius * 2
-                };
-            } else if (shape.type === 'line') {
-                bounds = {
-                    x: 0,
-                    y: 0,
-                    width: shape.endX - shape.startX,
-                    height: shape.endY - shape.startY
-                };
-            } else if (shape.type === 'brush') {
-                // حساب حدود الفرشاة
-                let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-                shape.points.forEach(p => {
-                    minX = Math.min(minX, p.x);
-                    minY = Math.min(minY, p.y);
-                    maxX = Math.max(maxX, p.x);
-                    maxY = Math.max(maxY, p.y);
-                });
-                bounds = {
-                    x: minX - (shape.x || 0),
-                    y: minY - (shape.y || 0),
-                    width: maxX - minX,
-                    height: maxY - minY
-                };
-            }
-            
-            ctx.strokeRect(bounds.x, bounds.y, bounds.width, bounds.height);
-            ctx.setLineDash([]);
-            ctx.restore();
-        }
-
-        function isPointInShape(x, y, shape) {
-            // كود التحقق مما إذا كانت النقطة داخل الشكل
-            return false;
         }
 
         function saveState() {
@@ -353,59 +296,28 @@
         }
 
         // ===================================
-        // التحكم في الأحداث
+        // التحكم في الأحداث (Events)
         // ===================================
         
         canvas.addEventListener('mousedown', (e) => {
-            const mouseX = e.offsetX;
-            const mouseY = e.offsetY;
-
-            if (currentTool === 'select') {
-                selectedShape = findShapeAt(mouseX, mouseY);
-                if (selectedShape) {
-                    isDragging = true;
-                    startX = mouseX;
-                    startY = mouseY;
-                    canvas.classList.add('select-mode');
-                } else {
-                    selectedShape = null;
-                    redrawCanvas();
-                }
-            } else {
-                drawing = true;
-                startX = mouseX;
-                startY = mouseY;
-                selectedShape = null;
-                
-                if (currentTool === 'brush') {
-                    currentShapePreview = {
-                        type: 'brush',
-                        points: [{ x: startX, y: startY }],
-                        color: document.getElementById('color-picker').value,
-                        width: document.getElementById('line-width').value,
-                        x: startX,
-                        y: startY
-                    };
-                }
+            drawing = true;
+            startX = (e.offsetX - transform.translateX) / transform.scale;
+            startY = (e.offsetY - transform.translateY) / transform.scale;
+            
+            if (currentTool === 'brush') {
+                currentShapePreview = {
+                    type: 'brush',
+                    points: [{ x: startX, y: startY }],
+                    color: document.getElementById('color-picker').value,
+                    width: document.getElementById('line-width').value
+                };
             }
         });
         
         canvas.addEventListener('mousemove', (e) => {
-            const mouseX = e.offsetX;
-            const mouseY = e.offsetY;
-
-            if (isDragging && selectedShape) {
-                const dx = mouseX - startX;
-                const dy = mouseY - startY;
-                selectedShape.x += dx;
-                selectedShape.y += dy;
-                startX = mouseX;
-                startY = mouseY;
-                redrawCanvas();
-                return;
-            }
-
             if (!drawing) return;
+            const mouseX = (e.offsetX - transform.translateX) / transform.scale;
+            const mouseY = (e.offsetY - transform.translateY) / transform.scale;
             
             if (currentTool === 'brush') {
                 currentShapePreview.points.push({ x: mouseX, y: mouseY });
@@ -419,12 +331,6 @@
         });
 
         canvas.addEventListener('mouseup', (e) => {
-            if (isDragging) {
-                isDragging = false;
-                canvas.classList.remove('select-mode');
-                saveState();
-                redrawCanvas();
-            }
             if (!drawing) return;
             drawing = false;
             
@@ -437,16 +343,36 @@
             redrawCanvas();
         });
         
-        function findShapeAt(x, y) {
-            const currentLayerData = animationData[currentFrame].layers[currentLayer];
-            for (let i = currentLayerData.length - 1; i >= 0; i--) {
-                const shape = currentLayerData[i];
-                if (isPointInShape(x, y, shape)) {
-                    return shape;
-                }
+        // ===================================
+        // وظيفة الزوم (Mouse Wheel)
+        // ===================================
+
+        canvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const delta = Math.sign(e.deltaY);
+            const scaleFactor = 1.1;
+            const oldScale = transform.scale;
+            let newScale = oldScale;
+
+            if (delta < 0) {
+                newScale *= scaleFactor;
+            } else {
+                newScale /= scaleFactor;
             }
-            return null;
-        }
+
+            if (newScale < 0.1) newScale = 0.1;
+            if (newScale > 10) newScale = 10;
+            
+            const mouseX = e.offsetX;
+            const mouseY = e.offsetY;
+            
+            transform.translateX -= (mouseX / oldScale - mouseX / newScale) * oldScale;
+            transform.translateY -= (mouseY / oldScale - mouseY / newScale) * oldScale;
+            transform.scale = newScale;
+
+            canvas.style.transform = `translate(${transform.translateX}px, ${transform.translateY}px) scale(${newScale})`;
+            redrawCanvas();
+        });
 
         // ===================================
         // وظائف الأدوات الأخرى
@@ -457,8 +383,6 @@
                 tools.forEach(btn => btn.classList.remove('active'));
                 button.classList.add('active');
                 currentTool = button.id.replace('-tool', '');
-                selectedShape = null;
-                redrawCanvas();
             });
         });
 
