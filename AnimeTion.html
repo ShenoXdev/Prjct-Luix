@@ -186,7 +186,7 @@
                     <button id="export-json">تصدير JSON</button>
                     <input type="file" id="import-json" accept=".json" style="display: none;">
                     <label for="import-json" class="sidebar-button" style="cursor: pointer; padding: 10px; border: 1px solid var(--border-color); border-radius: 5px; background-color: var(--bg-color); color: var(--secondary-color); text-align: center;">استيراد JSON</label>
-                    <button id="export-mp4">تصدير MP4</button>
+                    <button id="export-png-sequence">تصدير تسلسل صور PNG</button>
                 </div>
             </div>
 
@@ -289,7 +289,6 @@
             const shapeX = shape.x !== undefined ? shape.x : shape.startX;
             const shapeY = shape.y !== undefined ? shape.y : shape.startY;
 
-            // Apply shape-specific transformations
             ctx.translate(shapeX, shapeY);
             ctx.rotate(shape.rotation || 0);
             ctx.scale(shape.scale || 1, shape.scale || 1);
@@ -324,7 +323,11 @@
             if (shape.type === 'circle') {
                 return { x: -shape.radius, y: -shape.radius, width: shape.radius * 2, height: shape.radius * 2 };
             } else if (shape.type === 'line') {
-                return { x: 0, y: 0, width: shape.endX - shape.startX, height: shape.endY - shape.startY };
+                let minX = Math.min(shape.startX, shape.endX);
+                let minY = Math.min(shape.startY, shape.endY);
+                let maxX = Math.max(shape.startX, shape.endX);
+                let maxY = Math.max(shape.startY, shape.endY);
+                return { x: minX - shape.startX, y: minY - shape.startY, width: maxX - minX, height: maxY - minY };
             } else if (shape.type === 'brush') {
                 let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
                 shape.points.forEach(p => {
@@ -344,7 +347,6 @@
             const rotation = shape.rotation || 0;
             const bounds = getShapeBounds(shape);
 
-            // Draw bounding box
             ctx.save();
             ctx.translate(transform.x, transform.y);
             ctx.scale(transform.scale, transform.scale);
@@ -358,7 +360,6 @@
             ctx.strokeRect(bounds.x, bounds.y, bounds.width, bounds.height);
             ctx.setLineDash([]);
             
-            // Draw handles
             const handleSize = 10 / (transform.scale * scale);
             const handles = [
                 { x: bounds.x, y: bounds.y, cursor: 'nwse-resize' },
@@ -374,7 +375,6 @@
                 ctx.fill();
             });
 
-            // Draw rotate handle
             ctx.beginPath();
             ctx.arc(bounds.x + bounds.width / 2, bounds.y - 30 / (transform.scale * scale), handleSize / 2, 0, Math.PI * 2);
             ctx.fill();
@@ -422,40 +422,39 @@
             ctx.restore();
             return false;
         }
-
-        function getHandleType(x, y, shape) {
-            if (!shape) return null;
+        
+        function isPointInHandle(x, y, shape, handleType) {
             const shapeX = shape.x !== undefined ? shape.x : shape.startX;
             const shapeY = shape.y !== undefined ? shape.y : shape.startY;
             const scale = shape.scale || 1;
             const rotation = shape.rotation || 0;
             const bounds = getShapeBounds(shape);
+            const handleSize = 10;
             const transformedX = (x - transform.x) / transform.scale;
             const transformedY = (y - transform.y) / transform.scale;
-
-            const pointInShapeSpace = rotatePoint({x: transformedX, y: transformedY}, {x: shapeX, y: shapeY}, -rotation);
-            const handleSize = 10;
-
-            const handles = [
-                { x: shapeX + bounds.x * scale, y: shapeY + bounds.y * scale, type: 'resize' },
-                { x: shapeX + (bounds.x + bounds.width) * scale, y: shapeY + bounds.y * scale, type: 'resize' },
-                { x: shapeX + (bounds.x + bounds.width) * scale, y: shapeY + (bounds.y + bounds.height) * scale, type: 'resize' },
-                { x: shapeX + bounds.x * scale, y: shapeY + (bounds.y + bounds.height) * scale, type: 'resize' },
+            
+            const handlePoints = [
+                rotatePoint({ x: shapeX + bounds.x * scale, y: shapeY + bounds.y * scale }, { x: shapeX, y: shapeY }, rotation),
+                rotatePoint({ x: shapeX + (bounds.x + bounds.width) * scale, y: shapeY + bounds.y * scale }, { x: shapeX, y: shapeY }, rotation),
+                rotatePoint({ x: shapeX + (bounds.x + bounds.width) * scale, y: shapeY + (bounds.y + bounds.height) * scale }, { x: shapeX, y: shapeY }, rotation),
+                rotatePoint({ x: shapeX + bounds.x * scale, y: shapeY + (bounds.y + bounds.height) * scale }, { x: shapeX, y: shapeY }, rotation),
             ];
-
-            for (const handle of handles) {
-                if (Math.abs(transformedX - handle.x) < handleSize && Math.abs(transformedY - handle.y) < handleSize) {
-                    return handle.type;
+            
+            if (handleType === 'resize') {
+                for(const handle of handlePoints) {
+                    if (Math.abs(transformedX - handle.x) < handleSize && Math.abs(transformedY - handle.y) < handleSize) {
+                        return true;
+                    }
+                }
+            } else if (handleType === 'rotate') {
+                const rotateHandlePoint = rotatePoint({ x: shapeX + (bounds.x + bounds.width / 2) * scale, y: shapeY + (bounds.y - 30) * scale }, { x: shapeX, y: shapeY }, rotation);
+                if (Math.abs(transformedX - rotateHandlePoint.x) < handleSize && Math.abs(transformedY - rotateHandlePoint.y) < handleSize) {
+                    return true;
                 }
             }
 
-            const rotateHandleY = shapeY + (bounds.y - 30) * scale;
-            if (Math.abs(transformedX - (shapeX + bounds.x + bounds.width/2) * scale) < handleSize && Math.abs(transformedY - rotateHandleY) < handleSize) {
-                return 'rotate';
-            }
-            return null;
+            return false;
         }
-
 
         function saveState() {
             if (historyIndex < history.length - 1) {
@@ -474,18 +473,26 @@
             const { x, y } = getTransformedPoint(e.clientX, e.clientY);
             
             if (currentTool === 'select') {
+                if (selectedShape) {
+                    if (isPointInHandle(e.clientX, e.clientY, selectedShape, 'rotate')) {
+                        isRotating = true;
+                        startX = e.clientX;
+                        startY = e.clientY;
+                        return;
+                    }
+                    if (isPointInHandle(e.clientX, e.clientY, selectedShape, 'resize')) {
+                        isResizing = true;
+                        startX = e.clientX;
+                        startY = e.clientY;
+                        return;
+                    }
+                }
+
                 selectedShape = findShapeAt(x, y);
                 if (selectedShape) {
-                    activeHandle = getHandleType(e.clientX, e.clientY, selectedShape);
-                    if (activeHandle === 'resize') {
-                        isResizing = true;
-                    } else if (activeHandle === 'rotate') {
-                        isRotating = true;
-                    } else {
-                        isDragging = true;
-                        startX = x;
-                        startY = y;
-                    }
+                    isDragging = true;
+                    startX = x;
+                    startY = y;
                     canvas.classList.add('select-mode');
                 } else {
                     selectedShape = null;
@@ -516,9 +523,6 @@
                 const dx = mouseX - startX;
                 const dy = mouseY - startY;
 
-                const shapeX = selectedShape.x !== undefined ? selectedShape.x : selectedShape.startX;
-                const shapeY = selectedShape.y !== undefined ? selectedShape.y : selectedShape.startY;
-
                 if (selectedShape.type === 'brush') {
                     selectedShape.points = selectedShape.points.map(p => ({ x: p.x + dx, y: p.y + dy }));
                 } else if (selectedShape.type === 'line') {
@@ -538,15 +542,14 @@
             }
 
             if (isResizing && selectedShape) {
-                // Resize logic is complex and depends on which handle is being dragged
-                // For simplicity, we'll implement a basic proportional resize from the center
                 const shapeX = selectedShape.x !== undefined ? selectedShape.x : selectedShape.startX;
                 const shapeY = selectedShape.y !== undefined ? selectedShape.y : selectedShape.startY;
                 const oldScale = selectedShape.scale || 1;
                 
-                const dx = mouseX - shapeX;
-                const dy = mouseY - shapeY;
-                const newScale = Math.sqrt(dx * dx + dy * dy) / (Math.sqrt(Math.pow(startX - shapeX, 2) + Math.pow(startY - shapeY, 2)));
+                const currentDistance = Math.sqrt(Math.pow(mouseX - shapeX, 2) + Math.pow(mouseY - shapeY, 2));
+                const originalDistance = Math.sqrt(Math.pow(startX - shapeX, 2) + Math.pow(startY - shapeY, 2));
+
+                const newScale = oldScale * (currentDistance / originalDistance);
                 selectedShape.scale = newScale;
                 redrawCanvas();
                 return;
@@ -737,11 +740,88 @@
             };
             reader.readAsText(file);
         });
-        
-        document.getElementById('export-mp4').addEventListener('click', () => {
-            alert('تصدير MP4 يتطلب مكتبة خارجية (مثل FFmpeg.js) وهو أمر معقد.');
+
+        document.getElementById('export-png-sequence').addEventListener('click', () => {
+            exportPngSequence();
         });
-        
+
+        function exportPngSequence() {
+            const zip = new JSZip();
+            const originalFrame = currentFrame;
+
+            const exportPromises = animationData.map((frame, index) => {
+                return new Promise(resolve => {
+                    const tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = canvas.width;
+                    tempCanvas.height = canvas.height;
+                    const tempCtx = tempCanvas.getContext('2d');
+                    
+                    const originalTransform = JSON.parse(JSON.stringify(transform));
+                    transform = { scale: 1, x: 0, y: 0 };
+                    
+                    tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
+                    tempCtx.fillStyle = 'white';
+                    tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+                    
+                    frame.layers.forEach(layer => {
+                        layer.forEach(shape => {
+                            if (shape) {
+                                tempCtx.save();
+                                const shapeX = shape.x !== undefined ? shape.x : shape.startX;
+                                const shapeY = shape.y !== undefined ? shape.y : shape.startY;
+                                tempCtx.translate(shapeX, shapeY);
+                                tempCtx.rotate(shape.rotation || 0);
+                                tempCtx.scale(shape.scale || 1, shape.scale || 1);
+                                tempCtx.strokeStyle = shape.color;
+                                tempCtx.lineWidth = shape.width;
+                                if (shape.type === 'brush') {
+                                    tempCtx.lineCap = 'round';
+                                    tempCtx.beginPath();
+                                    if (shape.points.length > 1) {
+                                        tempCtx.moveTo(shape.points[0].x - shapeX, shape.points[0].y - shapeY);
+                                        for (let i = 1; i < shape.points.length; i++) {
+                                            tempCtx.lineTo(shape.points[i].x - shapeX, shape.points[i].y - shapeY);
+                                        }
+                                    }
+                                    tempCtx.stroke();
+                                } else if (shape.type === 'line') {
+                                    tempCtx.beginPath();
+                                    tempCtx.moveTo(0, 0);
+                                    tempCtx.lineTo(shape.endX - shape.startX, shape.endY - shape.startY);
+                                    tempCtx.stroke();
+                                } else if (shape.type === 'circle') {
+                                    tempCtx.beginPath();
+                                    tempCtx.arc(0, 0, shape.radius, 0, Math.PI * 2);
+                                    tempCtx.stroke();
+                                }
+                                tempCtx.restore();
+                            }
+                        });
+                    });
+
+                    tempCanvas.toBlob(blob => {
+                        zip.file(`frame_${String(index).padStart(4, '0')}.png`, blob);
+                        transform = originalTransform;
+                        resolve();
+                    }, 'image/png');
+                });
+            });
+
+            Promise.all(exportPromises).then(() => {
+                zip.generateAsync({ type: "blob" }).then(content => {
+                    const downloadLink = document.createElement('a');
+                    downloadLink.href = URL.createObjectURL(content);
+                    downloadLink.download = 'animation_frames.zip';
+                    document.body.appendChild(downloadLink);
+                    downloadLink.click();
+                    document.body.removeChild(downloadLink);
+                    
+                    redrawCanvas(); // Restore the original view
+                });
+            });
+        }
+
+
         function updateFrameInfo() {
             document.getElementById('frame-info').textContent = `إطار ${currentFrame + 1} / ${animationData.length}`;
         }
@@ -770,5 +850,6 @@
         updateLayersList();
         saveState();
     </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </body>
 </html>
