@@ -137,7 +137,7 @@
     </label>
     <label class="menu-button">
       Size
-      <input type="number" id="brushSize" min="1" max="100" value="3" step="1" class="hidden-input">
+      <input type="number" id="sizeinput" min="1" max="100" value="3" step="1" class="hidden-input">
     </label>
     <label class="menu-button" id="exportBtn">
       Export
@@ -192,7 +192,7 @@
   const canvas = document.getElementById("canvas");
   const ctx = canvas.getContext("2d");
   const colorPicker = document.getElementById("colorPicker");
-  const brushSize = document.getElementById("brushSize");
+  const sizeInput = document.getElementById("sizeinput");
   const undoBtn = document.getElementById("undoBtn");
   const redoBtn = document.getElementById("redoBtn");
   const saveBtn = document.getElementById("saveBtn");
@@ -301,7 +301,7 @@
       lastY = pos.y;
       currentPath = {
         color: colorPicker.value,
-        size: parseFloat(brushSize.value),
+        size: parseFloat(sizeInput.value),
         points: []
       };
       drawing = true;
@@ -378,7 +378,7 @@
       lastY = pos.y;
       currentPath = {
         color: colorPicker.value,
-        size: parseFloat(brushSize.value),
+        size: parseFloat(sizeInput.value),
         points: []
       };
       drawing = true;
