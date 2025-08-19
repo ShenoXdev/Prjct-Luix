@@ -31,7 +31,7 @@
     #top-menu .menu-buttons-container {
       display: flex;
       gap: 10px;
-      align-items: center; /* Ensures vertical alignment */
+      align-items: center;
     }
     #top-menu .menu-button {
       background: white;
@@ -61,29 +61,28 @@
     
     /* New Style for Size Input Field */
     #size-container {
-      display: flex;
-      align-items: center;
-      gap: 5px;
       background: white;
       border: 1px solid #e846ff;
       border-radius: 5px;
       height: 40px;
-      padding: 0 10px;
-      color: #c300e3;
-      font-weight: bold;
+      width: 60px; /* Adjusted width */
+      display: flex;
+      justify-content: center;
+      align-items: center;
       box-sizing: border-box;
     }
     #sizeinput {
-      width: 50px;
+      width: 40px; /* Adjusted width */
       border: none;
       text-align: center;
       color: #c300e3;
       font-weight: bold;
-      -moz-appearance: textfield; /* Hide arrows on Firefox */
+      -moz-appearance: textfield;
+      background: transparent;
     }
     #sizeinput::-webkit-outer-spin-button,
     #sizeinput::-webkit-inner-spin-button {
-        -webkit-appearance: none; /* Hide arrows on Chrome/Safari */
+        -webkit-appearance: none;
         margin: 0;
     }
 
@@ -166,7 +165,6 @@
       <input type="color" id="colorPicker" value="#cd00e3" class="hidden-input">
     </label>
     <div id="size-container">
-      Size
       <input type="number" id="sizeinput" min="1" max="100" value="3" step="1">
     </div>
     <label class="menu-button" id="exportBtn">
