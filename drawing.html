@@ -224,18 +224,6 @@
         return Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
     }
     
-    function checkMovement(e) {
-        const currentX = e.clientX || e.touches[0].clientX;
-        const currentY = e.clientY || e.touches[0].clientY;
-        const movementThreshold = 5; // Pixels
-        if (lastX && lastY && (Math.abs(currentX - lastX) > movementThreshold || Math.abs(currentY - lastY) > movementThreshold)) {
-            return true;
-        }
-        lastX = currentX;
-        lastY = currentY;
-        return false;
-    }
-
     function zoomToPoint(pointX, pointY, newZoom) {
         const canvasX = pointX * zoom + panX;
         const canvasY = pointY * zoom + panY;
