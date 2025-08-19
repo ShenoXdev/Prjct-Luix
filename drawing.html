@@ -30,7 +30,7 @@
     }
     #top-menu .menu-buttons-container {
       display: flex;
-      gap: 10px; /* This is the new change to add space between buttons */
+      gap: 10px;
     }
     #top-menu .menu-button {
       background: white;
@@ -137,9 +137,9 @@
     </label>
     <label class="menu-button">
       Size
-      <input type="range" id="brushSize" min="1" max="100" value="3" step="1" class="hidden-input">
+      <input type="number" id="brushSize" min="1" max="100" value="3" step="1" class="hidden-input">
     </label>
-    <label class="menu-button">
+    <label class="menu-button" id="exportBtn">
       Export
     </label>
   </div>
@@ -200,8 +200,8 @@
   const homeBtn = document.getElementById("homeBtn");
   const jsonFileInput = document.getElementById("jsonFileInput");
   const zoomInfo = document.getElementById("zoomInfo");
-  const exportLabel = document.querySelector('.menu-button:nth-of-type(3)');
-  
+  const exportBtn = document.getElementById("exportBtn");
+
   // Initialize canvas
   let width = window.innerWidth;
   let height = window.innerHeight - 100;
@@ -451,7 +451,7 @@
     }
   });
 
-  exportLabel.addEventListener("click", () => {
+  exportBtn.addEventListener("click", () => {
     const link = document.createElement('a');
     link.download = 'drawing.png';
     link.href = canvas.toDataURL();
@@ -483,6 +483,28 @@
 
   homeBtn.addEventListener("click", () => {
     window.location.href = "https://shenoxdev.github.io/Endless-Drawings-1.0//LuixPage.html";
+  });
+
+  jsonFileInput.addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const data = JSON.parse(event.target.result);
+        paths = data.paths || [];
+        zoom = data.zoom || 1;
+        panX = data.panX || 0;
+        panY = data.panY || 0;
+        undonePaths = [];
+        drawAll();
+      } catch (err) {
+        alert("Error loading file: " + err.message);
+      }
+    };
+    reader.readAsText(file);
+    jsonFileInput.value = '';
   });
 
   window.addEventListener("resize", () => {
