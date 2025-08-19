@@ -1,86 +1,415 @@
 <!DOCTYPE html>
 <html lang="ar">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>برنامج رسوم متحركة (نسخة تجريبية)</title>
-    <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>برنامج رسوم متحركة (نسخة تجريبية)</title>
+  <style>
+    body {
+      background-color: #333;
+      color: #f0f0f0;
+      font-family: Arial, sans-serif;
+      margin: 0;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      direction: rtl;
+    }
+
+    .main-container {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    .sidebar {
+      background-color: #2b2b2b;
+      padding: 10px;
+      box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.5);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .left-toolbar {
+      width: 60px;
+      align-items: center;
+    }
+
+    .right-toolbar {
+      width: 250px;
+    }
+
+    .tool-group {
+      margin-bottom: 15px;
+      border-bottom: 1px solid #444;
+      padding-bottom: 15px;
+    }
+
+    .tool-group:last-child {
+      border-bottom: none;
+    }
+
+    .tool-button {
+      background: none;
+      border: 1px solid transparent;
+      border-radius: 4px;
+      width: 40px;
+      height: 40px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      cursor: pointer;
+      margin-bottom: 5px;
+      transition: background-color 0.2s, border-color 0.2s;
+    }
+
+    .tool-button:hover {
+      background-color: #444;
+    }
+
+    .tool-button.active {
+      background-color: #4a4a4a;
+      border-color: #555;
+    }
+
+    .center-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background-color: #1e1e1e;
+      position: relative;
+    }
+
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 20px;
+      background-color: #2b2b2b;
+      border-bottom: 1px solid #444;
+    }
+
+    .top-bar input {
+      background-color: #444;
+      border: 1px solid #555;
+      color: #f0f0f0;
+      padding: 4px;
+      border-radius: 3px;
+      width: 60px;
+      text-align: center;
+    }
+
+    #main-canvas {
+      background-color: #fff;
+      border: 1px solid #444;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+      flex-grow: 1;
+      cursor: crosshair;
+      margin: 20px;
+    }
+
+    .timeline-container {
+      height: 120px;
+      background-color: #2b2b2b;
+      border-top: 1px solid #444;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .timeline-controls {
+      padding: 10px;
+      border-bottom: 1px solid #444;
+    }
+
+    .timeline-frames {
+      flex-grow: 1;
+      overflow-x: auto;
+      display: flex;
+      padding: 10px 0;
+    }
+
+    .panel {
+      background-color: #383838;
+      border-radius: 5px;
+      padding: 10px;
+      margin-bottom: 15px;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+    }
+
+    .panel h3 {
+      margin: 0 0 10px 0;
+      font-size: 16px;
+      border-bottom: 1px solid #444;
+      padding-bottom: 5px;
+    }
+
+    #layers-list {
+      list-style-type: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    #layers-list li {
+      padding: 5px;
+      border-radius: 3px;
+      margin-bottom: 3px;
+      background-color: #4a4a4a;
+      cursor: pointer;
+    }
+
+    button {
+      background-color: #4a4a4a;
+      color: #fff;
+      border: none;
+      padding: 8px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+
+    button:hover {
+      background-color: #5a5a5a;
+    }
+  </style>
 </head>
 <body>
 
-    <div class="main-container">
-
-        <div class="sidebar left-toolbar">
-            <div class="tool-group">
-                <button id="brush-tool" class="tool-button active">
-                    <img src="https://img.icons8.com/material-outlined/24/000000/paint-brush.png" alt="فرشاة">
-                </button>
-                <button id="line-tool" class="tool-button">
-                    <img src="https://img.icons8.com/material-outlined/24/000000/line.png" alt="خط">
-                </button>
-                <button id="circle-tool" class="tool-button">
-                    <img src="https://img.icons8.com/material-outlined/24/000000/circle.png" alt="دائرة">
-                </button>
-                <button id="erase-tool" class="tool-button">
-                    <img src="https://img.icons8.com/material-outlined/24/000000/eraser.png" alt="ممساحة">
-                </button>
-            </div>
-            <div class="tool-group">
-                <button id="select-tool" class="tool-button">
-                    <img src="https://img.icons8.com/material-outlined/24/000000/select-tool.png" alt="تحديد">
-                </button>
-                <button id="zoom-in" class="tool-button">
-                    <img src="https://img.icons8.com/material-outlined/24/000000/zoom-in.png" alt="تكبير">
-                </button>
-                <button id="zoom-out" class="tool-button">
-                    <img src="https://img.icons8.com/material-outlined/24/000000/zoom-out.png" alt="تصغير">
-                </button>
-            </div>
-        </div>
-
-        <div class="center-area">
-            <div class="top-bar">
-                <div class="file-options">
-                    <button id="save-project">حفظ المشروع</button>
-                    <button id="export-mp4">تصدير MP4</button>
-                </div>
-                <div class="canvas-settings">
-                    <label for="fps-input">الإطارات/ثانية:</label>
-                    <input type="number" id="fps-input" value="24" min="1">
-                    <label for="canvas-width">العرض:</label>
-                    <input type="number" id="canvas-width" value="1280">
-                    <label for="canvas-height">الارتفاع:</label>
-                    <input type="number" id="canvas-height" value="720">
-                </div>
-            </div>
-            <canvas id="main-canvas"></canvas>
-        </div>
-
-        <div class="sidebar right-toolbar">
-            <div class="panel">
-                <h3>الطبقات</h3>
-                <ul id="layers-list">
-                    <li>الطبقة 1</li>
-                </ul>
-            </div>
-            <div class="panel">
-                <h3>خصائص الأداة</h3>
-                <div id="tool-properties">
-                    </div>
-            </div>
-        </div>
+  <div class="main-container">
+    <div class="sidebar left-toolbar">
+      <div class="tool-group">
+        <button id="brush-tool" class="tool-button active">
+          <img src="https://img.icons8.com/material-outlined/24/000000/paint-brush.png" alt="فرشاة">
+        </button>
+        <button id="line-tool" class="tool-button">
+          <img src="https://img.icons8.com/material-outlined/24/000000/line.png" alt="خط">
+        </button>
+        <button id="circle-tool" class="tool-button">
+          <img src="https://img.icons8.com/material-outlined/24/000000/circle.png" alt="دائرة">
+        </button>
+        <button id="erase-tool" class="tool-button">
+          <img src="https://img.icons8.com/material-outlined/24/000000/eraser.png" alt="ممساحة">
+        </button>
+      </div>
+      <div class="tool-group">
+        <button id="select-tool" class="tool-button">
+          <img src="https://img.icons8.com/material-outlined/24/000000/select-tool.png" alt="تحديد">
+        </button>
+        <button id="zoom-in" class="tool-button">
+          <img src="https://img.icons8.com/material-outlined/24/000000/zoom-in.png" alt="تكبير">
+        </button>
+        <button id="zoom-out" class="tool-button">
+          <img src="https://img.icons8.com/material-outlined/24/000000/zoom-out.png" alt="تصغير">
+        </button>
+      </div>
     </div>
 
-    <div class="timeline-container">
-        <div class="timeline-controls">
-            <button>تشغيل</button>
-            <button>إيقاف</button>
-            <span>00:00</span>
+    <div class="center-area">
+      <div class="top-bar">
+        <div class="file-options">
+          <button id="save-project">حفظ المشروع</button>
+          <button id="export-mp4">تصدير MP4</button>
         </div>
-        <div class="timeline-frames">
-            </div>
+        <div class="canvas-settings">
+          <label for="fps-input">الإطارات/ثانية:</label>
+          <input type="number" id="fps-input" value="24" min="1">
+          <label for="canvas-width">العرض:</label>
+          <input type="number" id="canvas-width" value="1280">
+          <label for="canvas-height">الارتفاع:</label>
+          <input type="number" id="canvas-height" value="720">
+        </div>
+      </div>
+      <canvas id="main-canvas"></canvas>
     </div>
 
-    <script src="script.js"></script>
+    <div class="sidebar right-toolbar">
+      <div class="panel">
+        <h3>الطبقات</h3>
+        <ul id="layers-list">
+          <li>الطبقة 1</li>
+        </ul>
+      </div>
+      <div class="panel">
+        <h3>خصائص الأداة</h3>
+        <div id="tool-properties"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="timeline-container">
+    <div class="timeline-controls">
+      <button>تشغيل</button>
+      <button>إيقاف</button>
+      <span>00:00</span>
+    </div>
+    <div class="timeline-frames"></div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const canvas = document.getElementById('main-canvas');
+      const ctx = canvas.getContext('2d');
+      const toolButtons = document.querySelectorAll('.tool-button');
+      const canvasWidthInput = document.getElementById('canvas-width');
+      const canvasHeightInput = document.getElementById('canvas-height');
+      const saveProjectButton = document.getElementById('save-project');
+      const exportMP4Button = document.getElementById('export-mp4');
+
+      let currentTool = 'brush';
+      let isDrawing = false;
+      let startPoint = { x: 0, y: 0 };
+      let tempCanvas;
+      let tempCtx;
+
+      const setupTempCanvas = () => {
+        tempCanvas = document.createElement('canvas');
+        tempCtx = tempCanvas.getContext('2d');
+        tempCanvas.width = canvas.width;
+        tempCanvas.height = canvas.height;
+        tempCanvas.style.position = 'absolute';
+        tempCanvas.style.top = `${canvas.offsetTop}px`;
+        tempCanvas.style.left = `${canvas.offsetLeft}px`;
+        tempCanvas.style.pointerEvents = 'none';
+        document.querySelector('.center-area').appendChild(tempCanvas);
+      };
+
+      const changeTool = (tool) => {
+        toolButtons.forEach(btn => btn.classList.remove('active'));
+        document.getElementById(`${tool}-tool`).classList.add('active');
+        currentTool = tool;
+        canvas.style.cursor = getCursorStyle(tool);
+      };
+
+      const getCursorStyle = (tool) => {
+        switch (tool) {
+          case 'brush':
+          case 'line':
+          case 'circle':
+            return 'crosshair';
+          case 'erase':
+            return 'url(https://img.icons8.com/material-outlined/24/000000/eraser.png) 12 12, auto';
+          case 'select':
+            return 'move';
+          default:
+            return 'default';
+        }
+      };
+
+      const resizeCanvas = () => {
+        const width = parseInt(canvasWidthInput.value, 10);
+        const height = parseInt(canvasHeightInput.value, 10);
+        canvas.width = width;
+        canvas.height = height;
+        if (tempCanvas) {
+          tempCanvas.width = width;
+          tempCanvas.height = height;
+        }
+      };
+
+      const startDrawing = (e) => {
+        isDrawing = true;
+        startPoint.x = e.offsetX;
+        startPoint.y = e.offsetY;
+
+        if (currentTool === 'brush' || currentTool === 'erase') {
+          ctx.beginPath();
+          ctx.moveTo(startPoint.x, startPoint.y);
+        }
+      };
+
+      const draw = (e) => {
+        if (!isDrawing) return;
+        const currentX = e.offsetX;
+        const currentY = e.offsetY;
+
+        if (currentTool === 'brush') {
+          ctx.strokeStyle = '#000000';
+          ctx.lineWidth = 5;
+          ctx.lineCap = 'round';
+          ctx.lineTo(currentX, currentY);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(currentX, currentY);
+        } else if (currentTool === 'erase') {
+          ctx.clearRect(currentX - 10, currentY - 10, 20, 20);
+        } else if (currentTool === 'line') {
+          tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
+          tempCtx.beginPath();
+          tempCtx.strokeStyle = '#000000';
+          tempCtx.lineWidth = 2;
+          tempCtx.moveTo(startPoint.x, startPoint.y);
+          tempCtx.lineTo(currentX, currentY);
+          tempCtx.stroke();
+        } else if (currentTool === 'circle') {
+          tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
+          const radius = Math.sqrt(Math.pow(currentX - startPoint.x, 2) + Math.pow(currentY - startPoint.y, 2));
+          tempCtx.beginPath();
+          tempCtx.strokeStyle = '#000000';
+          tempCtx.lineWidth = 2;
+          tempCtx.arc(startPoint.x, startPoint.y, radius, 0, 2 * Math.PI);
+          tempCtx.stroke();
+        }
+      };
+
+      const stopDrawing = (e) => {
+        if (!isDrawing) return;
+        isDrawing = false;
+
+        if (currentTool === 'line') {
+          tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
+          ctx.beginPath();
+          ctx.strokeStyle = '#000000';
+          ctx.lineWidth = 2;
+          ctx.moveTo(startPoint.x, startPoint.y);
+          ctx.lineTo(e.offsetX, e.offsetY);
+          ctx.stroke();
+        } else if (currentTool === 'circle') {
+          tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
+          const radius = Math.sqrt(Math.pow(e.offsetX - startPoint.x, 2) + Math.pow(e.offsetY - startPoint.y, 2));
+          ctx.beginPath();
+          ctx.strokeStyle = '#000000';
+          ctx.lineWidth = 2;
+          ctx.arc(startPoint.x, startPoint.y, radius, 0, 2 * Math.PI);
+          ctx.stroke();
+        }
+      };
+
+      const saveProject = () => {
+        const data = {
+          canvasSize: { width: canvas.width, height: canvas.height },
+          imageData: canvas.toDataURL('image/png'),
+        };
+        const json = JSON.stringify(data);
+        const blob = new Blob([json], { type: 'application/json' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'my-animation-project.json';
+        a.click();
+      };
+
+      const exportMP4 = () => {
+        alert("تصدير MP4 يتطلب مكتبات خارجية معقدة. هذه الوظيفة غير متوفرة في هذا المثال البسيط.");
+      };
+
+      toolButtons.forEach(btn => {
+        btn.addEventListener('click', () => changeTool(btn.id.replace('-tool', '')));
+      });
+
+      canvasWidthInput.addEventListener('change', resizeCanvas);
+      canvasHeightInput.addEventListener('change', resizeCanvas);
+
+      canvas.addEventListener('mousedown', startDrawing);
+      canvas.addEventListener('mousemove', draw);
+      canvas.addEventListener('mouseup', stopDrawing);
+      canvas.addEventListener('mouseout', stopDrawing);
+
+      saveProjectButton.addEventListener('click', saveProject);
+      exportMP4Button.addEventListener('click', exportMP4);
+
+      resizeCanvas();
+      setupTempCanvas();
+      changeTool('brush');
+    });
+  </script>
 </body>
 </html>
