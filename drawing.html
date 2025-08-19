@@ -134,6 +134,7 @@
     <button id="saveBtn">💾 حفظ</button>
     <button id="saveJsonBtn">📁 JSON</button>
     <button id="loadJsonBtn">📂 فتح</button>
+    <button id="luixPageBtn">صفحة Luix</button>
     <input type="file" id="jsonFileInput" accept=".json">
 </div>
 
@@ -152,6 +153,7 @@
     const saveJsonBtn = document.getElementById("saveJsonBtn");
     const loadJsonBtn = document.getElementById("loadJsonBtn");
     const jsonFileInput = document.getElementById("jsonFileInput");
+    const luixPageBtn = document.getElementById("luixPageBtn");
     const zoomInfo = document.getElementById("zoomInfo");
 
     // Initialize canvas
@@ -282,7 +284,7 @@
             zoomEndTime = Date.now();
         }
         
-        if (drawing && currentPath.points.length > 1) {
+        if (drawing) {
             paths.push(currentPath);
             undonePaths = [];
         }
@@ -320,7 +322,7 @@
     });
 
     canvas.addEventListener("mouseup", () => {
-        if (drawing && currentPath.points.length > 1) {
+        if (drawing) {
             paths.push(currentPath);
             undonePaths = [];
         }
@@ -329,7 +331,7 @@
     });
 
     canvas.addEventListener("mouseleave", () => {
-        if (drawing && currentPath && currentPath.points.length > 1) {
+        if (drawing && currentPath) {
             paths.push(currentPath);
             undonePaths = [];
         }
@@ -411,6 +413,10 @@
             paths.push(undonePaths.pop());
             drawAll();
         }
+    });
+    
+    luixPageBtn.addEventListener("click", () => {
+        window.location.href = "https://shenoxdev.github.io/Endless-Drawings-1.0//LuixPage.html";
     });
 
     window.addEventListener("resize", () => {
