@@ -1,550 +1,227 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ar" dir="rtl">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Luix's Endless Drawing</title>
-  <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-      overflow: hidden;
-      touch-action: none;
-      font-family: sans-serif;
-    }
-
-    /* Top Menu Bar */
-    #top-menu {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 50px;
-      background: #c300e3;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 0 10px;
-      box-sizing: border-box;
-      z-index: 10;
-    }
-    #top-menu .menu-buttons-container {
-      display: flex;
-      gap: 10px;
-      align-items: center;
-    }
-    #top-menu .menu-button {
-      background: white;
-      color: #c300e3;
-      border: 1px solid #e846ff;
-      border-radius: 5px;
-      font-weight: bold;
-      height: 40px;
-      width: 100px;
-      cursor: pointer;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-    }
-    .logo-container {
-      height: 40px;
-      display: flex;
-      align-items: center;
-    }
-    .logo-svg {
-      height: 30px;
-      width: auto;
-    }
-    input[type="file"], .hidden-input {
-      display: none;
-    }
-    
-    /* New Style for Size Input Field */
-    #size-container {
-      background: white;
-      border: 1px solid #e846ff;
-      border-radius: 5px;
-      height: 40px;
-      width: 60px; /* Adjusted width */
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      box-sizing: border-box;
-    }
-    #sizeinput {
-      width: 40px; /* Adjusted width */
-      border: none;
-      text-align: center;
-      color: #c300e3;
-      font-weight: bold;
-      -moz-appearance: textfield;
-      background: transparent;
-    }
-    #sizeinput::-webkit-outer-spin-button,
-    #sizeinput::-webkit-inner-spin-button {
-        -webkit-appearance: none;
-        margin: 0;
-    }
-
-
-    /* Bottom Menu Bar */
-    #bottom-menu {
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      height: 50px;
-      background: #c300e3;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      padding: 0 10px;
-      gap: 10px;
-      z-index: 10;
-      box-sizing: border-box;
-    }
-    #bottom-menu button {
-      background: white;
-      color: #c300e3;
-      border: 1px solid #e846ff;
-      border-radius: 5px;
-      font-weight: bold;
-      height: 40px;
-      width: 80px;
-      cursor: pointer;
-    }
-    #bottom-menu .icon-btn {
-      width: 40px;
-      font-size: 24px;
-    }
-
-    canvas {
-      position: absolute;
-      top: 50px;
-      left: 0;
-      width: 100%;
-      height: calc(100% - 100px);
-      background: white;
-      touch-action: none;
-    }
-    .zoom-info {
-      position: fixed;
-      bottom: 60px;
-      left: 10px;
-      background: rgba(0,0,0,0.5);
-      color: white;
-      padding: 5px 10px;
-      border-radius: 5px;
-      font-size: 12px;
-      z-index: 10;
-    }
-    
-    @media (max-width: 600px) {
-      #top-menu {
-        justify-content: space-around;
-      }
-      #top-menu .menu-button {
-        width: 80px;
-      }
-      .logo-container {
-        position: static;
-        margin-left: auto;
-      }
-      canvas {
-        height: calc(100% - 100px);
-      }
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Simple Animation Engine</title>
+<style>
+  body { margin:0; font-family:sans-serif; background:#222; color:#fff; display:flex; height:100vh; }
+  #toolbar { width:300px; padding:10px; background:#333; display:flex; flex-direction:column; gap:10px; overflow-y:auto; }
+  button, input, select { padding:5px; font-size:14px; width:100%; }
+  #canvas-container { flex:1; background:#111; display:flex; justify-content:center; align-items:center; overflow:hidden; position:relative; }
+  canvas { background:#222; border:1px solid #555; cursor:crosshair; }
+  #layers { max-height:200px; overflow-y:auto; background:#444; padding:5px; }
+  .layer { padding:3px; border-bottom:1px solid #555; display:flex; justify-content:space-between; align-items:center; }
+</style>
 </head>
 <body>
 
-<div id="top-menu">
-  <div class="menu-buttons-container">
-    <label class="menu-button">
-      Color
-      <input type="color" id="colorPicker" value="#cd00e3" class="hidden-input">
-    </label>
-    <div id="size-container">
-      <input type="number" id="sizeinput" min="1" max="100" value="3" step="1">
-    </div>
-    <label class="menu-button" id="exportBtn">
-      Export
-    </label>
-  </div>
-  <div class="logo-container">
-    <svg class="logo-svg" xmlns="http://www.w3.org/2000/svg" width="60.219" height="32.321" viewBox="0 0 60.219 32.321">
-  <g id="Group_1" data-name="Group 1" transform="translate(-16 -21)">
-    <g id="Rectangle_1" data-name="Rectangle 1" transform="translate(16 21)" fill="#fff" stroke="#e846ff" stroke-width="1">
-      <rect width="8.758" height="31.821" rx="4.379" stroke="none"/>
-      <rect x="0.5" y="0.5" width="7.758" height="30.821" rx="3.879" fill="none"/>
-    </g>
-    <g id="Path_2" data-name="Path 2" transform="translate(33.224 29.174)">
-      <path id="Path_1" data-name="Path 1" d="M13.2,15.685H2.981A2.484,2.484,0,0,1,.5,13.2V2.986A2.485,2.485,0,0,1,2.832.509c-.013.61-.05,2.936.083,5.411.209,3.881.721,6.266,1.52,7.089a1,1,0,0,0,.728.34c.641,0,1.443-.676,2.451-2.067a37.822,37.822,0,0,0,2.654-4.433c1.516-2.882,2.79-5.8,3.026-6.343a2.484,2.484,0,0,1,2.386,2.48V13.2A2.484,2.484,0,0,1,13.2,15.685Z" transform="translate(-0.354 -0.358)" fill="#fff" stroke="#e846ff" stroke-width="1"/>
-      <path id="Path_2-2" data-name="Path 2" d="M13.034.3c-.318.731-1.544,3.51-2.99,6.259a37.962,37.962,0,0,1-2.665,4.451,9.555,9.555,0,0,1-1.3,1.5,2.008,2.008,0,0,1-1.273.626,1.144,1.144,0,0,1-.833-.384C3.152,11.9,2.626,9.487,2.415,5.57c-.124-2.3-.1-4.464-.087-5.259A2.339,2.339,0,0,0,.292,2.627V12.845a2.338,2.338,0,0,0,2.335,2.335H12.845a2.338,2.338,0,0,0,2.335-2.335V2.627A2.339,2.339,0,0,0,13.034.3M2.627,0S2.255,12.845,4.809,12.845,12.845,0,12.845,0a2.627,2.627,0,0,1,2.627,2.627V12.845a2.627,2.627,0,0,1-2.627,2.627H2.627A2.627,2.627,0,0,1,0,12.845V2.627A2.627,2.627,0,0,1,2.627,0Z" fill="#fff" stroke="#e846ff" stroke-width="1"/>
-    </g>
-    <g id="Rectangle_2" data-name="Rectangle 2" transform="translate(50.74 21)" fill="#fff" stroke="#e846ff" stroke-width="1">
-      <rect width="6.131" height="31.821" rx="3.065" stroke="none"/>
-      <rect x="0.5" y="0.5" width="5.131" height="30.821" rx="2.565" fill="none"/>
-    </g>
-    <g id="Path_4" data-name="Path 4" transform="matrix(0.829, -0.559, 0.559, 0.829, 61.234, 30.632)">
-      <path id="Path_3" data-name="Path 3" d="M2.19,17.808H1.9A1.9,1.9,0,0,1,0,15.91V1.9A1.9,1.9,0,0,1,1.9,0H2.19a1.9,1.9,0,0,1,1.9,1.9V15.91A1.9,1.9,0,0,1,2.19,17.808Z" transform="translate(0.146 0.146)" fill="#fff" stroke="#e846ff" stroke-width="1"/>
-      <path id="Path_4-2" data-name="Path 4" d="M2.044.292A1.754,1.754,0,0,0,.292,2.044V16.056a1.754,1.754,0,0,0,1.752,1.752h.292a1.754,1.754,0,0,0,1.752-1.752V2.044A1.754,1.754,0,0,0,2.335.292H2.044m0-.292h.292A2.044,2.044,0,0,1,4.379,2.044V16.056A2.044,2.044,0,0,1,2.335,18.1H2.044A2.044,2.044,0,0,1,0,16.056V2.044A2.044,2.044,0,0,1,2.044,0Z" fill="#e846ff" stroke="#e846ff" stroke-width="1"/>
-    </g>
-    <g id="Rectangle_4" data-name="Rectangle 4" transform="translate(73.123 29.174) rotate(45)" fill="#fff">
-      <path d="M 2.189504623413086 17.59990310668945 C 1.257914662361145 17.59990310668945 0.5000046491622925 16.84199333190918 0.5000046491622925 15.91040229797363 L 0.5000046491622925 2.189502477645874 C 0.5000046491622925 1.257912516593933 1.257914662361145 0.5000025033950806 2.189504623413086 0.5000025033950806 C 3.121094703674316 0.5000025033950806 3.879004716873169 1.257912516593933 3.879004716873169 2.189502477645874 L 3.87900447845459 15.91040229797363 C 3.87900447845459 16.84199333190918 3.121094703674316 17.59990310668945 2.189504623413086 17.59990310668945 Z" stroke="none"/>
-      <path d="M 2.189504623413086 1.000001907348633 C 1.533614635467529 1.000001907348633 1.000004529953003 1.533613204956055 1.000004529953003 2.189502716064453 L 1.000004529953003 15.91040229797363 C 1.000004529953003 16.56629180908203 1.533614635467529 17.09990310668945 2.189504623413086 17.09990310668945 C 2.845394611358643 17.09990310668945 3.37900447845459 16.56629180908203 3.37900447845459 15.91040229797363 L 3.37900447845459 2.189502716064453 C 3.37900447845459 1.533613204956055 2.845394611358643 1.000001907348633 2.189504623413086 1.000001907348633 M 2.189504623413086 1.9073486328125e-06 C 3.398734569549561 1.9073486328125e-06 4.37900447845459 0.9802722930908203 4.37900447845459 2.189502716064453 L 4.37900447845459 15.91040229797363 C 4.37900447845459 17.11963272094727 3.398734569549561 18.09990310668945 2.189504623413086 18.09990310668945 C 0.9802746772766113 18.09990310668945 4.76837158203125e-06 17.11963272094727 4.76837158203125e-06 15.91040229797363 L 4.76837158203125e-06 2.189502716064453 C 4.76837158203125e-06 0.9802722930908203 0.9802746772766113 1.9073486328125e-06 2.189504623413086 1.9073486328125e-06 Z" stroke="none" fill="#e846ff"/>
-    </g>
-    <g id="Path_3-2" data-name="Path 3" transform="translate(24.466 44.875)">
-      <path id="Path_5" data-name="Path 5" d="M11.739,3.409H2.106A1.607,1.607,0,0,1,.5,1.8V-4.05l.059.1c.3.49.747,1.231,1.373,1.231h9.807a1.607,1.607,0,0,1,1.606,1.606V1.8A1.607,1.607,0,0,1,11.739,3.409Z" transform="translate(-0.354 4.391)" fill="#fff" stroke="#e846ff" stroke-width="1"/>
-      <path id="Path_6" data-name="Path 6" d="M.292-4.365V.977a1.461,1.461,0,0,0,1.46,1.46h9.634a1.461,1.461,0,0,0,1.46-1.46V-1.943a1.461,1.461,0,0,0-1.46-1.46H1.578C1.013-3.4.6-3.9.292-4.365M.056-5.217c.171,0,.726,1.523,1.522,1.523h9.807a1.752,1.752,0,0,1,1.752,1.752V.977a1.752,1.752,0,0,1-1.752,1.752H1.752A1.752,1.752,0,0,1,0,.977V-4.976C0-5.147.019-5.217.056-5.217Z" transform="translate(0 5.217)" fill="#fff" stroke="#e846ff" stroke-width="1"/>
-    </g>
-  </g>
-</svg>
-  </div>
+<div id="toolbar">
+  <h3>Tools</h3>
+  <button id="brush">Brush</button>
+  <button id="line">Line</button>
+  <button id="circle">Circle</button>
+  <button id="eraser">Eraser</button>
+  <button id="select">Select</button>
+
+  <h3>Canvas</h3>
+  <label>Width: <input type="number" id="canvasWidth" value="800"></label>
+  <label>Height: <input type="number" id="canvasHeight" value="600"></label>
+  <button id="resizeCanvas">Resize Canvas</button>
+  <label>Zoom: <input type="range" id="zoom" min="0.5" max="3" step="0.1" value="1"></label>
+
+  <h3>Animation</h3>
+  <label>FPS: <input type="number" id="fps" value="24"></label>
+  <button id="addLayer">Add Layer</button>
+  <div id="layers"></div>
+
+  <h3>Project</h3>
+  <button id="saveJSON">Save JSON</button>
+  <button id="loadJSON">Load JSON</button>
+  <button id="exportMP4">Export MP4</button>
 </div>
 
-<canvas id="canvas"></canvas>
-<div class="zoom-info" id="zoomInfo">Zoom: 1x</div>
-
-<div id="bottom-menu">
-  <button id="undoBtn" class="icon-btn">↩️</button>
-  <button id="redoBtn" class="icon-btn">↪️</button>
-  <button id="saveBtn">Save</button>
-  <button id="loadBtn">Open</button>
-  <button id="homeBtn">Home</button>
-  <input type="file" id="jsonFileInput" accept=".json">
+<div id="canvas-container">
+  <canvas id="mainCanvas" width="800" height="600"></canvas>
 </div>
 
-
+<script src="https://cdnjs.cloudflare.com/ajax/libs/whammy/0.2.0/whammy.js"></script>
 <script>
-  const canvas = document.getElementById("canvas");
-  const ctx = canvas.getContext("2d");
-  const colorPicker = document.getElementById("colorPicker");
-  const sizeInput = document.getElementById("sizeinput");
-  const undoBtn = document.getElementById("undoBtn");
-  const redoBtn = document.getElementById("redoBtn");
-  const saveBtn = document.getElementById("saveBtn");
-  const loadBtn = document.getElementById("loadBtn");
-  const homeBtn = document.getElementById("homeBtn");
-  const jsonFileInput = document.getElementById("jsonFileInput");
-  const zoomInfo = document.getElementById("zoomInfo");
-  const exportBtn = document.getElementById("exportBtn");
+// ====== Variables ======
+const canvas = document.getElementById('mainCanvas');
+const ctx = canvas.getContext('2d');
+let tool = 'brush';
+let drawing = false;
+let startX=0, startY=0;
+let zoom = 1;
+let layers = [];
+let selectedLayer = null;
+let fps = 24;
+let objects = [];
+let selectedObject = null;
 
-  // Initialize canvas
-  let width = window.innerWidth;
-  let height = window.innerHeight - 100;
-  canvas.width = width;
-  canvas.height = height;
+// ====== Tool Buttons ======
+document.getElementById('brush').onclick = () => tool='brush';
+document.getElementById('line').onclick = () => tool='line';
+document.getElementById('circle').onclick = () => tool='circle';
+document.getElementById('eraser').onclick = () => tool='eraser';
+document.getElementById('select').onclick = () => tool='select';
 
-  // Drawing state
-  let paths = [];
-  let undonePaths = [];
-  let currentPath = null;
-  let drawing = false;
-  let hasMoved = false;
-  let lastX = 0;
-  let lastY = 0;
+// ====== Canvas Zoom ======
+document.getElementById('zoom').oninput = (e)=>{
+  zoom = parseFloat(e.target.value);
+  drawAll();
+};
 
-  // Zoom state
-  let zoom = 1;
-  let panX = 0;
-  let panY = 0;
-  let isZooming = false;
-  let lastTouchDist = 0;
-  let zoomEndTime = 0;
-  const ZOOM_COOLDOWN = 200;
-  const MIN_ZOOM = 1e-25;
-  const MAX_ZOOM = 1e25;
+// ====== Resize Canvas ======
+document.getElementById('resizeCanvas').onclick = ()=>{
+  canvas.width = parseInt(document.getElementById('canvasWidth').value);
+  canvas.height = parseInt(document.getElementById('canvasHeight').value);
+  drawAll();
+};
 
-  function updateZoomInfo() {
-    if (zoom < 0.0001 || zoom > 10000) {
-      zoomInfo.textContent = `Zoom: ${zoom.toExponential(2)}x`;
-    } else {
-      zoomInfo.textContent = `Zoom: ${zoom.toFixed(zoom >= 1 ? 2 : 8)}x`;
-    }
+// ====== Add Layer ======
+document.getElementById('addLayer').onclick = ()=>{
+  const layer = {name:'Layer '+(layers.length+1), objects:[], visible:true};
+  layers.push(layer);
+  selectedLayer = layer;
+  updateLayersUI();
+};
+
+// ====== Update Layers UI ======
+function updateLayersUI(){
+  const container = document.getElementById('layers');
+  container.innerHTML='';
+  layers.forEach((l,i)=>{
+    const div = document.createElement('div');
+    div.className='layer';
+    div.innerHTML = `<span>${l.name}</span>
+      <input type="checkbox" ${l.visible?'checked':''} onchange="layers[${i}].visible=this.checked;drawAll()">
+    `;
+    div.onclick = ()=>selectedLayer = l;
+    container.appendChild(div);
+  });
+}
+
+// ====== Canvas Drawing ======
+canvas.onmousedown = (e)=>{
+  const rect = canvas.getBoundingClientRect();
+  startX = (e.clientX - rect.left)/zoom;
+  startY = (e.clientY - rect.top)/zoom;
+  drawing = true;
+};
+
+canvas.onmouseup = (e)=>{
+  if(!drawing) return;
+  const rect = canvas.getBoundingClientRect();
+  const x = (e.clientX - rect.left)/zoom;
+  const y = (e.clientY - rect.top)/zoom;
+  if(selectedLayer){
+    const obj = {tool, startX, startY, endX:x, endY:y, color:'#fff', size:2};
+    selectedLayer.objects.push(obj);
+    objects.push(obj);
   }
+  drawing = false;
+  drawAll();
+};
 
-  function drawAll() {
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.setTransform(zoom, 0, 0, zoom, panX, panY);
+canvas.onmousemove = (e)=>{
+  if(!drawing) return;
+  drawAll();
+  const rect = canvas.getBoundingClientRect();
+  const x = (e.clientX - rect.left)/zoom;
+  const y = (e.clientY - rect.top)/zoom;
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  if(tool==='brush'){
+    ctx.moveTo(startX,startY);
+    ctx.lineTo(x,y);
+    ctx.stroke();
+    startX=x; startY=y;
+  } else if(tool==='line'){
+    ctx.moveTo(startX,startY);
+    ctx.lineTo(x,y);
+    ctx.stroke();
+  } else if(tool==='circle'){
+    const r=Math.hypot(x-startX,y-startY);
+    ctx.arc(startX,startY,r,0,Math.PI*2);
+    ctx.stroke();
+  } else if(tool==='eraser'){
+    ctx.clearRect(x-5,y-5,10,10);
+  }
+};
 
-    for (let path of paths) {
-      ctx.strokeStyle = path.color;
-      ctx.lineWidth = path.size;
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
+// ====== Draw All Layers ======
+function drawAll(){
+  ctx.setTransform(zoom,0,0,zoom,0,0);
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  layers.forEach(layer=>{
+    if(!layer.visible) return;
+    layer.objects.forEach(o=>{
+      ctx.strokeStyle = o.color;
+      ctx.lineWidth = o.size;
       ctx.beginPath();
-      if (path.points.length > 0) {
-        ctx.moveTo(path.points[0].x, path.points[0].y);
-        for (let i = 1; i < path.points.length; i++) {
-          ctx.lineTo(path.points[i].x, path.points[i].y);
-        }
-      }
-      ctx.stroke();
-    }
-    updateZoomInfo();
-  }
-
-  function getCanvasPos(e) {
-    const rect = canvas.getBoundingClientRect();
-    let clientX, clientY;
-    if (e.touches) {
-      clientX = e.touches[0].clientX;
-      clientY = e.touches[0].clientY;
-    } else {
-      clientX = e.clientX;
-      clientY = e.clientY;
-    }
-    return {
-      x: (clientX - rect.left - panX) / zoom,
-      y: (clientY - rect.top - panY) / zoom
-    };
-  }
-
-  function distance(t1, t2) {
-    return Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
-  }
-
-  function zoomToPoint(pointX, pointY, newZoom) {
-    const canvasX = pointX * zoom + panX;
-    const canvasY = pointY * zoom + panY;
-    zoom = Math.max(MIN_ZOOM, Math.min(newZoom, MAX_ZOOM));
-    panX = canvasX - pointX * zoom;
-    panY = canvasY - pointY * zoom;
-    drawAll();
-  }
-
-  // Touch events
-  canvas.addEventListener("touchstart", (e) => {
-    e.preventDefault();
-    
-    if (e.touches.length === 2) {
-      isZooming = true;
-      lastTouchDist = distance(e.touches[0], e.touches[1]);
-    } 
-    else if (e.touches.length === 1 && Date.now() - zoomEndTime > ZOOM_COOLDOWN) {
-      const pos = getCanvasPos(e);
-      lastX = pos.x;
-      lastY = pos.y;
-      currentPath = {
-        color: colorPicker.value,
-        size: parseFloat(sizeInput.value),
-        points: []
-      };
-      drawing = true;
-      hasMoved = false;
-    }
-  });
-
-  canvas.addEventListener("touchmove", (e) => {
-    e.preventDefault();
-    
-    if (isZooming && e.touches.length === 2) {
-      const newDist = distance(e.touches[0], e.touches[1]);
-      const center = {
-        x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
-        y: (e.touches[0].clientY + e.touches[1].clientY) / 2
-      };
-      const point = {
-        x: (center.x - canvas.getBoundingClientRect().left - panX) / zoom,
-        y: (center.y - canvas.getBoundingClientRect().top - panY) / zoom
-      };
-      zoomToPoint(point.x, point.y, zoom * (newDist / lastTouchDist));
-      lastTouchDist = newDist;
-    } 
-    else if (drawing && e.touches.length === 1 && !isZooming) {
-      const touch = e.touches[0];
-      const pos = getCanvasPos(e);
-      
-      const dx = pos.x - lastX;
-      const dy = pos.y - lastY;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      
-      if (dist > 0.5) {
-        if (!hasMoved) {
-          currentPath.points.push({x: lastX, y: lastY});
-          hasMoved = true;
-        }
-        currentPath.points.push(pos);
-        
-        ctx.strokeStyle = currentPath.color;
-        ctx.lineWidth = currentPath.size;
-        ctx.lineCap = "round";
-        ctx.lineJoin = "round";
-        ctx.beginPath();
-        ctx.moveTo(lastX, lastY);
-        ctx.lineTo(pos.x, pos.y);
+      if(o.tool==='brush'||o.tool==='line'){
+        ctx.moveTo(o.startX,o.startY);
+        ctx.lineTo(o.endX,o.endY);
         ctx.stroke();
-        
-        lastX = pos.x;
-        lastY = pos.y;
-      }
-    }
-  });
-
-  canvas.addEventListener("touchend", (e) => {
-    if (isZooming) {
-      isZooming = false;
-      zoomEndTime = Date.now();
-    }
-    
-    if (drawing && hasMoved && currentPath.points.length > 1) {
-      paths.push(currentPath);
-      undonePaths = [];
-    }
-    drawing = false;
-    currentPath = null;
-    hasMoved = false;
-  });
-
-  // Mouse events (for desktop)
-  canvas.addEventListener("mousedown", (e) => {
-    if (Date.now() - zoomEndTime > ZOOM_COOLDOWN) {
-      const pos = getCanvasPos(e);
-      lastX = pos.x;
-      lastY = pos.y;
-      currentPath = {
-        color: colorPicker.value,
-        size: parseFloat(sizeInput.value),
-        points: []
-      };
-      drawing = true;
-      hasMoved = false;
-    }
-  });
-
-  canvas.addEventListener("mousemove", (e) => {
-    if (drawing) {
-      const pos = getCanvasPos(e);
-      
-      const dx = pos.x - lastX;
-      const dy = pos.y - lastY;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      
-      if (dist > 0.5) {
-        if (!hasMoved) {
-          currentPath.points.push({x: lastX, y: lastY});
-          hasMoved = true;
-        }
-        currentPath.points.push(pos);
-        
-        ctx.strokeStyle = currentPath.color;
-        ctx.lineWidth = currentPath.size;
-        ctx.lineCap = "round";
-        ctx.lineJoin = "round";
-        ctx.beginPath();
-        ctx.moveTo(lastX, lastY);
-        ctx.lineTo(pos.x, pos.y);
+      } else if(o.tool==='circle'){
+        const r=Math.hypot(o.endX-o.startX,o.endY-o.startY);
+        ctx.arc(o.startX,o.startY,r,0,Math.PI*2);
         ctx.stroke();
-        
-        lastX = pos.x;
-        lastY = pos.y;
       }
-    }
+    });
   });
+}
 
-  canvas.addEventListener("mouseup", () => {
-    if (drawing && hasMoved && currentPath.points.length > 1) {
-      paths.push(currentPath);
-      undonePaths = [];
-    }
-    drawing = false;
-    currentPath = null;
-    hasMoved = false;
-  });
+// ====== FPS ======
+document.getElementById('fps').oninput = (e)=>{ fps = parseInt(e.target.value); };
 
-  canvas.addEventListener("mouseleave", () => {
-    if (drawing && hasMoved && currentPath.points.length > 1) {
-      paths.push(currentPath);
-      undonePaths = [];
-    }
-    drawing = false;
-    currentPath = null;
-    hasMoved = false;
-  });
+// ====== Save/Load JSON ======
+document.getElementById('saveJSON').onclick = ()=>{
+  const data = JSON.stringify(layers);
+  const blob = new Blob([data],{type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href=url; a.download='project.json';
+  a.click();
+};
 
-  // Button handlers
-  undoBtn.addEventListener("click", () => {
-    if (paths.length > 0) {
-      undonePaths.push(paths.pop());
-      drawAll();
-    }
-  });
-
-  redoBtn.addEventListener("click", () => {
-    if (undonePaths.length > 0) {
-      paths.push(undonePaths.pop());
-      drawAll();
-    }
-  });
-
-  exportBtn.addEventListener("click", () => {
-    const link = document.createElement('a');
-    link.download = 'drawing.png';
-    link.href = canvas.toDataURL();
-    link.click();
-  });
-
-  saveBtn.addEventListener("click", () => {
-    const data = {
-      paths: paths,
-      zoom: zoom,
-      panX: panX,
-      panY: panY
-    };
-    const json = JSON.stringify(data);
-    const blob = new Blob([json], {type: "application/json"});
-    const url = URL.createObjectURL(blob);
-    
-    const link = document.createElement('a');
-    link.download = 'drawing.json';
-    link.href = url;
-    link.click();
-    
-    setTimeout(() => URL.revokeObjectURL(url), 100);
-  });
-
-  loadBtn.addEventListener("click", () => {
-    jsonFileInput.click();
-  });
-
-  homeBtn.addEventListener("click", () => {
-    window.location.href = "https://shenoxdev.github.io/Endless-Drawings-1.0//LuixPage.html";
-  });
-
-  jsonFileInput.addEventListener("change", (e) => {
+document.getElementById('loadJSON').onclick = ()=>{
+  const input = document.createElement('input');
+  input.type='file';
+  input.accept='application/json';
+  input.onchange = e=>{
     const file = e.target.files[0];
-    if (!file) return;
-    
     const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const data = JSON.parse(event.target.result);
-        paths = data.paths || [];
-        zoom = data.zoom || 1;
-        panX = data.panX || 0;
-        panY = data.panY || 0;
-        undonePaths = [];
-        drawAll();
-      } catch (err) {
-        alert("Error loading file: " + err.message);
-      }
+    reader.onload = ()=>{
+      layers = JSON.parse(reader.result);
+      selectedLayer = layers[0]||null;
+      updateLayersUI();
+      drawAll();
     };
     reader.readAsText(file);
-    jsonFileInput.value = '';
-  });
+  };
+  input.click();
+};
 
-  window.addEventListener("resize", () => {
-    width = window.innerWidth;
-    height = window.innerHeight - 100;
-    canvas.width = width;
-    canvas.height = height;
-    drawAll();
+// ====== Export MP4 (Whammy.js) ======
+document.getElementById('exportMP4').onclick = ()=>{
+  const encoder = new Whammy.Video(fps);
+  layers.forEach(layer=>{
+    layer.objects.forEach(o=>{
+      drawAll();
+      encoder.add(ctx);
+    });
   });
+  const output = encoder.compile();
+  const url = URL.createObjectURL(output);
+  const a = document.createElement('a');
+  a.href=url; a.download='animation.mp4';
+  a.click();
+};
 
-  // Initial draw
-  drawAll();
 </script>
 </body>
 </html>
