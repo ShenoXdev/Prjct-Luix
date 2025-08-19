@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Luix`s Endless Drawing</title>
+  <title>Luix's Endless Drawing</title>
   <style>
     html, body {
       margin: 0;
@@ -13,7 +13,7 @@
       font-family: sans-serif;
     }
 
-    /* شريط الأدوات العلوي */
+    /* Top Menu Bar */
     #top-menu {
       position: fixed;
       top: 0;
@@ -22,13 +22,13 @@
       height: 50px;
       background: #c300e3;
       display: flex;
-      justify-content: space-around;
+      justify-content: space-between;
       align-items: center;
       padding: 0 10px;
       box-sizing: border-box;
       z-index: 10;
     }
-    #top-menu button {
+    #top-menu .menu-button {
       background: #cd00e3;
       color: white;
       border: 1px solid #e846ff;
@@ -37,18 +37,9 @@
       height: 40px;
       width: 100px;
       cursor: pointer;
-    }
-    #top-menu .color-label, #top-menu .size-label, #top-menu .export-label {
-      background: #cd00e3;
-      color: white;
-      border: 1px solid #e846ff;
-      border-radius: 5px;
-      font-weight: bold;
-      height: 40px;
       display: flex;
       justify-content: center;
       align-items: center;
-      cursor: pointer;
     }
     #top-menu .logo-exit-container {
       display: flex;
@@ -69,11 +60,11 @@
       line-height: 1;
       padding: 0;
     }
-    .export-label {
+    input[type="file"], .hidden-input {
       display: none;
     }
 
-    /* شريط الأدوات السفلي */
+    /* Bottom Menu Bar */
     #bottom-menu {
       position: fixed;
       bottom: 0;
@@ -124,25 +115,23 @@
       font-size: 12px;
       z-index: 10;
     }
-    input[type="file"], .hidden-input {
-      display: none;
-    }
-
+    
     @media (max-width: 600px) {
-      .export-label {
-        display: flex;
-        width: 100px;
+      #top-menu {
+        justify-content: space-around;
       }
-      #top-menu button {
-        width: 100%;
-        margin: 0;
-      }
-      #top-menu .color-label, #top-menu .size-label {
+      #top-menu .menu-button {
         width: 80px;
       }
       #top-menu .logo-exit-container {
-        position: absolute;
-        right: 10px;
+        position: static;
+        margin-left: auto;
+      }
+      .exit-btn {
+        margin-right: 5px;
+      }
+      canvas {
+        height: calc(100% - 100px);
       }
     }
   </style>
@@ -150,16 +139,16 @@
 <body>
 
 <div id="top-menu">
-  <label class="color-label">
-    اللون
+  <label class="menu-button">
+    Color
     <input type="color" id="colorPicker" value="#cd00e3" class="hidden-input">
   </label>
-  <label class="size-label">
-    الحجم
+  <label class="menu-button">
+    Size
     <input type="number" id="brushSize" min="1" max="100" value="3" step="1" class="hidden-input">
   </label>
-  <label class="export-label">
-    حفظ
+  <label class="menu-button">
+    Export
   </label>
   <div class="logo-exit-container">
     <svg class="logo-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 206.276 109">
@@ -195,7 +184,7 @@
 </div>
 
 <canvas id="canvas"></canvas>
-<div class="zoom-info" id="zoomInfo">زوم: 1x</div>
+<div class="zoom-info" id="zoomInfo">Zoom: 1x</div>
 
 <div id="bottom-menu">
   <button id="undoBtn" class="icon-btn">↩️</button>
@@ -204,7 +193,6 @@
   <button id="loadBtn">Open</button>
   <button id="homeBtn">Home</button>
   <input type="file" id="jsonFileInput" accept=".json">
-  <input type="file" id="imageFileInput" accept="image/*">
 </div>
 
 
@@ -221,7 +209,7 @@
   const jsonFileInput = document.getElementById("jsonFileInput");
   const zoomInfo = document.getElementById("zoomInfo");
   const exitBtn = document.querySelector(".exit-btn");
-  const exportLabel = document.querySelector(".export-label");
+  const exportLabel = document.querySelector(".menu-button:nth-child(3)");
 
   // Initialize canvas
   let width = window.innerWidth;
@@ -251,9 +239,9 @@
 
   function updateZoomInfo() {
     if (zoom < 0.0001 || zoom > 10000) {
-      zoomInfo.textContent = `زوم: ${zoom.toExponential(2)}x`;
+      zoomInfo.textContent = `Zoom: ${zoom.toExponential(2)}x`;
     } else {
-      zoomInfo.textContent = `زوم: ${zoom.toFixed(zoom >= 1 ? 2 : 8)}x`;
+      zoomInfo.textContent = `Zoom: ${zoom.toFixed(zoom >= 1 ? 2 : 8)}x`;
     }
   }
 
@@ -364,6 +352,7 @@
         ctx.strokeStyle = currentPath.color;
         ctx.lineWidth = currentPath.size;
         ctx.lineCap = "round";
+        ctx.lineJoin = "round";
         ctx.beginPath();
         ctx.moveTo(lastX, lastY);
         ctx.lineTo(pos.x, pos.y);
@@ -424,6 +413,7 @@
         ctx.strokeStyle = currentPath.color;
         ctx.lineWidth = currentPath.size;
         ctx.lineCap = "round";
+        ctx.lineJoin = "round";
         ctx.beginPath();
         ctx.moveTo(lastX, lastY);
         ctx.lineTo(pos.x, pos.y);
@@ -468,6 +458,13 @@
       paths.push(undonePaths.pop());
       drawAll();
     }
+  });
+
+  exportLabel.addEventListener("click", () => {
+    const link = document.createElement('a');
+    link.download = 'drawing.png';
+    link.href = canvas.toDataURL();
+    link.click();
   });
 
   saveBtn.addEventListener("click", () => {
@@ -516,7 +513,7 @@
         undonePaths = [];
         drawAll();
       } catch (err) {
-        alert("خطأ في تحميل الملف: " + err.message);
+        alert("Error loading file: " + err.message);
       }
     };
     reader.readAsText(file);
