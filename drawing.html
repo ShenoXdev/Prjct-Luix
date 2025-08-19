@@ -169,7 +169,9 @@
     let undonePaths = [];
     let currentPath = null;
     let drawing = false;
-    let lastX, lastY;
+    let hasMoved = false;
+    let lastX = 0;
+    let lastY = 0;
 
     // Zoom state
     let zoom = 1;
@@ -181,9 +183,6 @@
     const ZOOM_COOLDOWN = 200;
     const MIN_ZOOM = 1e-25;
     const MAX_ZOOM = 1e25;
-    
-    // Offset for drawing
-    const Y_OFFSET = 30; // Adjust this value to change the drawing position relative to the finger/cursor
 
     function updateZoomInfo() {
         if (zoom < 0.0001 || zoom > 10000) {
@@ -220,14 +219,6 @@
             y: (e.clientY - rect.top - panY) / zoom
         };
     }
-    
-    function getCanvasPosWithOffset(e) {
-        const rect = canvas.getBoundingClientRect();
-        return {
-            x: (e.clientX - rect.left - panX) / zoom,
-            y: (e.clientY - rect.top - Y_OFFSET - panY) / zoom
-        };
-    }
 
     function distance(t1, t2) {
         return Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
@@ -262,9 +253,16 @@
             isZooming = true;
             lastTouchDist = distance(e.touches[0], e.touches[1]);
         } else if (e.touches.length === 1 && Date.now() - zoomEndTime > ZOOM_COOLDOWN) {
-            drawing = false;
-            lastX = e.touches[0].clientX;
-            lastY = e.touches[0].clientY;
+            const pos = getCanvasPos(e.touches[0]);
+            lastX = pos.x;
+            lastY = pos.y;
+            currentPath = {
+                color: colorPicker.value,
+                size: parseFloat(brushSize.value),
+                points: []
+            };
+            drawing = true;
+            hasMoved = false;
         }
     });
 
@@ -283,28 +281,32 @@
             };
             zoomToPoint(point.x, point.y, zoom * (newDist / lastTouchDist));
             lastTouchDist = newDist;
-        } else if (e.touches.length === 1 && !isZooming) {
-            if (!drawing && checkMovement(e)) {
-                const pos = getCanvasPosWithOffset(e.touches[0]);
-                currentPath = {
-                    color: colorPicker.value,
-                    size: parseFloat(brushSize.value),
-                    points: [pos]
-                };
-                drawing = true;
-            }
-            if (drawing) {
-                const pos = getCanvasPosWithOffset(e.touches[0]);
+        } else if (drawing && e.touches.length === 1 && !isZooming) {
+            const touch = e.touches[0];
+            const pos = getCanvasPos(touch);
+
+            const dx = pos.x - lastX;
+            const dy = pos.y - lastY;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+
+            if (dist > 0.5) {
+                if (!hasMoved) {
+                    currentPath.points.push({x: lastX, y: lastY});
+                    hasMoved = true;
+                }
                 currentPath.points.push(pos);
-                
+
                 ctx.strokeStyle = currentPath.color;
                 ctx.lineWidth = currentPath.size;
                 ctx.lineCap = "round";
                 ctx.lineJoin = "round";
                 ctx.beginPath();
-                ctx.moveTo(currentPath.points[currentPath.points.length - 2].x, currentPath.points[currentPath.points.length - 2].y);
+                ctx.moveTo(lastX, lastY);
                 ctx.lineTo(pos.x, pos.y);
                 ctx.stroke();
+
+                lastX = pos.x;
+                lastY = pos.y;
             }
         }
     });
@@ -315,66 +317,79 @@
             zoomEndTime = Date.now();
         }
         
-        if (drawing && currentPath.points.length > 1) {
+        if (drawing && hasMoved) {
             paths.push(currentPath);
             undonePaths = [];
         }
         drawing = false;
         currentPath = null;
+        hasMoved = false;
     });
 
     // Mouse events (for desktop)
     canvas.addEventListener("mousedown", (e) => {
         if (Date.now() - zoomEndTime > ZOOM_COOLDOWN) {
-            drawing = false;
-            lastX = e.clientX;
-            lastY = e.clientY;
+            const pos = getCanvasPos(e);
+            lastX = pos.x;
+            lastY = pos.y;
+            currentPath = {
+                color: colorPicker.value,
+                size: parseFloat(brushSize.value),
+                points: []
+            };
+            drawing = true;
+            hasMoved = false;
         }
     });
 
     canvas.addEventListener("mousemove", (e) => {
-        if (e.buttons === 1) { // Check if left mouse button is held down
-            if (!drawing && checkMovement(e)) {
-                const pos = getCanvasPosWithOffset(e);
-                currentPath = {
-                    color: colorPicker.value,
-                    size: parseFloat(brushSize.value),
-                    points: [pos]
-                };
-                drawing = true;
-            }
-            if (drawing) {
-                const pos = getCanvasPosWithOffset(e);
+        if (drawing) {
+            const pos = getCanvasPos(e);
+
+            const dx = pos.x - lastX;
+            const dy = pos.y - lastY;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+
+            if (dist > 0.5) {
+                if (!hasMoved) {
+                    currentPath.points.push({x: lastX, y: lastY});
+                    hasMoved = true;
+                }
                 currentPath.points.push(pos);
-                
+
                 ctx.strokeStyle = currentPath.color;
                 ctx.lineWidth = currentPath.size;
                 ctx.lineCap = "round";
                 ctx.lineJoin = "round";
                 ctx.beginPath();
-                ctx.moveTo(currentPath.points[currentPath.points.length - 2].x, currentPath.points[currentPath.points.length - 2].y);
+                ctx.moveTo(lastX, lastY);
                 ctx.lineTo(pos.x, pos.y);
                 ctx.stroke();
+
+                lastX = pos.x;
+                lastY = pos.y;
             }
         }
     });
 
     canvas.addEventListener("mouseup", () => {
-        if (drawing && currentPath.points.length > 1) {
+        if (drawing && hasMoved) {
             paths.push(currentPath);
             undonePaths = [];
         }
         drawing = false;
         currentPath = null;
+        hasMoved = false;
     });
 
     canvas.addEventListener("mouseleave", () => {
-        if (drawing && currentPath && currentPath.points.length > 1) {
+        if (drawing && hasMoved) {
             paths.push(currentPath);
             undonePaths = [];
         }
         drawing = false;
         currentPath = null;
+        hasMoved = false;
     });
 
     // Button handlers
