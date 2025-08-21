@@ -1,227 +1,393 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Simple Animation Engine</title>
-<style>
-  body { margin:0; font-family:sans-serif; background:#222; color:#fff; display:flex; height:100vh; }
-  #toolbar { width:300px; padding:10px; background:#333; display:flex; flex-direction:column; gap:10px; overflow-y:auto; }
-  button, input, select { padding:5px; font-size:14px; width:100%; }
-  #canvas-container { flex:1; background:#111; display:flex; justify-content:center; align-items:center; overflow:hidden; position:relative; }
-  canvas { background:#222; border:1px solid #555; cursor:crosshair; }
-  #layers { max-height:200px; overflow-y:auto; background:#444; padding:5px; }
-  .layer { padding:3px; border-bottom:1px solid #555; display:flex; justify-content:space-between; align-items:center; }
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Luix`s Endless Drawing</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      touch-action: none;
+      font-family: sans-serif;
+    }
+    #menu {
+      position: fixed;
+      top: 0;
+      right: 0;
+      left: 0;
+      background: #f0f0f0;
+      padding: 10px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      z-index: 10;
+    }
+    canvas {
+      position: absolute;
+      top: 50px;
+      left: 0;
+      width: 100%;
+      height: calc(100% - 50px);
+      background: white;
+      touch-action: none;
+    }
+    .zoom-info {
+      position: fixed;
+      bottom: 10px;
+      left: 10px;
+      background: rgba(0,0,0,0.5);
+      color: white;
+      padding: 5px 10px;
+      border-radius: 5px;
+      font-size: 12px;
+    }
+    input[type="file"] {
+      display: none;
+    }
+  </style>
 </head>
 <body>
 
-<div id="toolbar">
-  <h3>Tools</h3>
-  <button id="brush">Brush</button>
-  <button id="line">Line</button>
-  <button id="circle">Circle</button>
-  <button id="eraser">Eraser</button>
-  <button id="select">Select</button>
-
-  <h3>Canvas</h3>
-  <label>Width: <input type="number" id="canvasWidth" value="800"></label>
-  <label>Height: <input type="number" id="canvasHeight" value="600"></label>
-  <button id="resizeCanvas">Resize Canvas</button>
-  <label>Zoom: <input type="range" id="zoom" min="0.5" max="3" step="0.1" value="1"></label>
-
-  <h3>Animation</h3>
-  <label>FPS: <input type="number" id="fps" value="24"></label>
-  <button id="addLayer">Add Layer</button>
-  <div id="layers"></div>
-
-  <h3>Project</h3>
-  <button id="saveJSON">Save JSON</button>
-  <button id="loadJSON">Load JSON</button>
-  <button id="exportMP4">Export MP4</button>
+<div id="menu">
+  <label>🎨 اللون: <input type="color" id="colorPicker" value="#000000"></label>
+  <label>🖌️ الحجم: <input type="number" id="brushSize" min="1" max="100" value="3" step="1"></label>
+  <button id="undoBtn">↩️ تراجع</button>
+  <button id="redoBtn">↪️ إعادة</button>
+  <button id="clearBtn">🧹 مسح</button>
+  <button id="saveBtn">💾 حفظ صورة</button>
+  <button id="saveJsonBtn">📁 حفظ JSON</button>
+  <button id="loadJsonBtn">📂 فتح JSON</button>
+  <input type="file" id="jsonFileInput" accept=".json">
 </div>
 
-<div id="canvas-container">
-  <canvas id="mainCanvas" width="800" height="600"></canvas>
-</div>
+<canvas id="canvas"></canvas>
+<div class="zoom-info" id="zoomInfo">زوم: 1x</div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/whammy/0.2.0/whammy.js"></script>
 <script>
-// ====== Variables ======
-const canvas = document.getElementById('mainCanvas');
-const ctx = canvas.getContext('2d');
-let tool = 'brush';
-let drawing = false;
-let startX=0, startY=0;
-let zoom = 1;
-let layers = [];
-let selectedLayer = null;
-let fps = 24;
-let objects = [];
-let selectedObject = null;
+  const canvas = document.getElementById("canvas");
+  const ctx = canvas.getContext("2d");
+  const colorPicker = document.getElementById("colorPicker");
+  const brushSize = document.getElementById("brushSize");
+  const undoBtn = document.getElementById("undoBtn");
+  const redoBtn = document.getElementById("redoBtn");
+  const clearBtn = document.getElementById("clearBtn");
+  const saveBtn = document.getElementById("saveBtn");
+  const saveJsonBtn = document.getElementById("saveJsonBtn");
+  const loadJsonBtn = document.getElementById("loadJsonBtn");
+  const jsonFileInput = document.getElementById("jsonFileInput");
+  const zoomInfo = document.getElementById("zoomInfo");
 
-// ====== Tool Buttons ======
-document.getElementById('brush').onclick = () => tool='brush';
-document.getElementById('line').onclick = () => tool='line';
-document.getElementById('circle').onclick = () => tool='circle';
-document.getElementById('eraser').onclick = () => tool='eraser';
-document.getElementById('select').onclick = () => tool='select';
+  // Initialize canvas
+  let width = window.innerWidth;
+  let height = window.innerHeight - 50;
+  canvas.width = width;
+  canvas.height = height;
 
-// ====== Canvas Zoom ======
-document.getElementById('zoom').oninput = (e)=>{
-  zoom = parseFloat(e.target.value);
-  drawAll();
-};
+  // Drawing state
+  let paths = [];
+  let undonePaths = [];
+  let currentPath = null;
+  let drawing = false;
+  let hasMoved = false;
+  let lastX = 0;
+  let lastY = 0;
 
-// ====== Resize Canvas ======
-document.getElementById('resizeCanvas').onclick = ()=>{
-  canvas.width = parseInt(document.getElementById('canvasWidth').value);
-  canvas.height = parseInt(document.getElementById('canvasHeight').value);
-  drawAll();
-};
+  // Zoom state
+  let zoom = 1;
+  let panX = 0;
+  let panY = 0;
+  let isZooming = false;
+  let lastTouchDist = 0;
+  let zoomEndTime = 0;
+  const ZOOM_COOLDOWN = 200;
+  const MIN_ZOOM = 1e-25; // 0.0000000000000000000000001
+  const MAX_ZOOM = 1e25;
 
-// ====== Add Layer ======
-document.getElementById('addLayer').onclick = ()=>{
-  const layer = {name:'Layer '+(layers.length+1), objects:[], visible:true};
-  layers.push(layer);
-  selectedLayer = layer;
-  updateLayersUI();
-};
-
-// ====== Update Layers UI ======
-function updateLayersUI(){
-  const container = document.getElementById('layers');
-  container.innerHTML='';
-  layers.forEach((l,i)=>{
-    const div = document.createElement('div');
-    div.className='layer';
-    div.innerHTML = `<span>${l.name}</span>
-      <input type="checkbox" ${l.visible?'checked':''} onchange="layers[${i}].visible=this.checked;drawAll()">
-    `;
-    div.onclick = ()=>selectedLayer = l;
-    container.appendChild(div);
-  });
-}
-
-// ====== Canvas Drawing ======
-canvas.onmousedown = (e)=>{
-  const rect = canvas.getBoundingClientRect();
-  startX = (e.clientX - rect.left)/zoom;
-  startY = (e.clientY - rect.top)/zoom;
-  drawing = true;
-};
-
-canvas.onmouseup = (e)=>{
-  if(!drawing) return;
-  const rect = canvas.getBoundingClientRect();
-  const x = (e.clientX - rect.left)/zoom;
-  const y = (e.clientY - rect.top)/zoom;
-  if(selectedLayer){
-    const obj = {tool, startX, startY, endX:x, endY:y, color:'#fff', size:2};
-    selectedLayer.objects.push(obj);
-    objects.push(obj);
+  function updateZoomInfo() {
+    if (zoom < 0.0001 || zoom > 10000) {
+      zoomInfo.textContent = `زوم: ${zoom.toExponential(2)}x`;
+    } else {
+      zoomInfo.textContent = `زوم: ${zoom.toFixed(zoom >= 1 ? 2 : 8)}x`;
+    }
   }
-  drawing = false;
-  drawAll();
-};
 
-canvas.onmousemove = (e)=>{
-  if(!drawing) return;
-  drawAll();
-  const rect = canvas.getBoundingClientRect();
-  const x = (e.clientX - rect.left)/zoom;
-  const y = (e.clientY - rect.top)/zoom;
-  ctx.strokeStyle = '#fff';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  if(tool==='brush'){
-    ctx.moveTo(startX,startY);
-    ctx.lineTo(x,y);
-    ctx.stroke();
-    startX=x; startY=y;
-  } else if(tool==='line'){
-    ctx.moveTo(startX,startY);
-    ctx.lineTo(x,y);
-    ctx.stroke();
-  } else if(tool==='circle'){
-    const r=Math.hypot(x-startX,y-startY);
-    ctx.arc(startX,startY,r,0,Math.PI*2);
-    ctx.stroke();
-  } else if(tool==='eraser'){
-    ctx.clearRect(x-5,y-5,10,10);
-  }
-};
+  function drawAll() {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.setTransform(zoom, 0, 0, zoom, panX, panY);
 
-// ====== Draw All Layers ======
-function drawAll(){
-  ctx.setTransform(zoom,0,0,zoom,0,0);
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-  layers.forEach(layer=>{
-    if(!layer.visible) return;
-    layer.objects.forEach(o=>{
-      ctx.strokeStyle = o.color;
-      ctx.lineWidth = o.size;
+    for (let path of paths) {
+      ctx.strokeStyle = path.color;
+      ctx.lineWidth = path.size;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
       ctx.beginPath();
-      if(o.tool==='brush'||o.tool==='line'){
-        ctx.moveTo(o.startX,o.startY);
-        ctx.lineTo(o.endX,o.endY);
-        ctx.stroke();
-      } else if(o.tool==='circle'){
-        const r=Math.hypot(o.endX-o.startX,o.endY-o.startY);
-        ctx.arc(o.startX,o.startY,r,0,Math.PI*2);
-        ctx.stroke();
+      for (let i = 0; i < path.points.length - 1; i++) {
+        ctx.moveTo(path.points[i].x, path.points[i].y);
+        ctx.lineTo(path.points[i + 1].x, path.points[i + 1].y);
       }
-    });
+      ctx.stroke();
+    }
+    updateZoomInfo();
+  }
+
+  function getCanvasPos(e) {
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: (e.clientX - rect.left - panX) / zoom,
+      y: (e.clientY - rect.top - panY) / zoom
+    };
+  }
+
+  function distance(t1, t2) {
+    return Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+  }
+
+  function zoomToPoint(pointX, pointY, newZoom) {
+    const canvasX = pointX * zoom + panX;
+    const canvasY = pointY * zoom + panY;
+    zoom = Math.max(MIN_ZOOM, Math.min(newZoom, MAX_ZOOM));
+    panX = canvasX - pointX * zoom;
+    panY = canvasY - pointY * zoom;
+    drawAll();
+  }
+
+  // Touch events
+  canvas.addEventListener("touchstart", (e) => {
+    e.preventDefault();
+    
+    if (e.touches.length === 2) {
+      isZooming = true;
+      lastTouchDist = distance(e.touches[0], e.touches[1]);
+    } 
+    else if (e.touches.length === 1 && !isZooming && Date.now() - zoomEndTime > ZOOM_COOLDOWN) {
+      const pos = getCanvasPos(e.touches[0]);
+      lastX = pos.x;
+      lastY = pos.y;
+      currentPath = {
+        color: colorPicker.value,
+        size: parseFloat(brushSize.value),
+        points: []
+      };
+      drawing = true;
+      hasMoved = false;
+    }
   });
-}
 
-// ====== FPS ======
-document.getElementById('fps').oninput = (e)=>{ fps = parseInt(e.target.value); };
+  canvas.addEventListener("touchmove", (e) => {
+    e.preventDefault();
+    
+    if (isZooming && e.touches.length === 2) {
+      const newDist = distance(e.touches[0], e.touches[1]);
+      const center = {
+        x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+        y: (e.touches[0].clientY + e.touches[1].clientY) / 2
+      };
+      const point = {
+        x: (center.x - canvas.getBoundingClientRect().left - panX) / zoom,
+        y: (center.y - canvas.getBoundingClientRect().top - panY) / zoom
+      };
+      zoomToPoint(point.x, point.y, zoom * (newDist / lastTouchDist));
+      lastTouchDist = newDist;
+    } 
+    else if (drawing && e.touches.length === 1 && !isZooming) {
+      const touch = e.touches[0];
+      const pos = getCanvasPos(touch);
+      
+      const dx = pos.x - lastX;
+      const dy = pos.y - lastY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      
+      if (dist > 0.5) {
+        if (!hasMoved) {
+          currentPath.points.push({x: lastX, y: lastY});
+          hasMoved = true;
+        }
+        currentPath.points.push(pos);
+        
+        ctx.strokeStyle = currentPath.color;
+        ctx.lineWidth = currentPath.size;
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(lastX, lastY);
+        ctx.lineTo(pos.x, pos.y);
+        ctx.stroke();
+        
+        lastX = pos.x;
+        lastY = pos.y;
+      }
+    }
+  });
 
-// ====== Save/Load JSON ======
-document.getElementById('saveJSON').onclick = ()=>{
-  const data = JSON.stringify(layers);
-  const blob = new Blob([data],{type:'application/json'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href=url; a.download='project.json';
-  a.click();
-};
+  canvas.addEventListener("touchend", (e) => {
+    if (isZooming) {
+      isZooming = false;
+      zoomEndTime = Date.now();
+    }
+    
+    if (drawing && hasMoved && currentPath.points.length > 1) {
+      paths.push(currentPath);
+      undonePaths = [];
+    }
+    drawing = false;
+    currentPath = null;
+    hasMoved = false;
+  });
 
-document.getElementById('loadJSON').onclick = ()=>{
-  const input = document.createElement('input');
-  input.type='file';
-  input.accept='application/json';
-  input.onchange = e=>{
+  // Mouse events (for desktop)
+  canvas.addEventListener("mousedown", (e) => {
+    if (Date.now() - zoomEndTime > ZOOM_COOLDOWN) {
+      const pos = getCanvasPos(e);
+      lastX = pos.x;
+      lastY = pos.y;
+      currentPath = {
+        color: colorPicker.value,
+        size: parseFloat(brushSize.value),
+        points: []
+      };
+      drawing = true;
+      hasMoved = false;
+    }
+  });
+
+  canvas.addEventListener("mousemove", (e) => {
+    if (drawing) {
+      const pos = getCanvasPos(e);
+      
+      const dx = pos.x - lastX;
+      const dy = pos.y - lastY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      
+      if (dist > 0.5) {
+        if (!hasMoved) {
+          currentPath.points.push({x: lastX, y: lastY});
+          hasMoved = true;
+        }
+        currentPath.points.push(pos);
+        
+        ctx.strokeStyle = currentPath.color;
+        ctx.lineWidth = currentPath.size;
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(lastX, lastY);
+        ctx.lineTo(pos.x, pos.y);
+        ctx.stroke();
+        
+        lastX = pos.x;
+        lastY = pos.y;
+      }
+    }
+  });
+
+  canvas.addEventListener("mouseup", () => {
+    if (drawing && hasMoved && currentPath.points.length > 1) {
+      paths.push(currentPath);
+      undonePaths = [];
+    }
+    drawing = false;
+    currentPath = null;
+    hasMoved = false;
+  });
+
+  canvas.addEventListener("mouseleave", () => {
+    if (drawing && hasMoved && currentPath.points.length > 1) {
+      paths.push(currentPath);
+      undonePaths = [];
+    }
+    drawing = false;
+    currentPath = null;
+    hasMoved = false;
+  });
+
+  // Button handlers
+  clearBtn.addEventListener("click", () => {
+    paths = [];
+    undonePaths = [];
+    zoom = 1;
+    panX = 0;
+    panY = 0;
+    drawAll();
+  });
+
+  saveBtn.addEventListener("click", () => {
+    const link = document.createElement('a');
+    link.download = 'drawing.png';
+    link.href = canvas.toDataURL();
+    link.click();
+  });
+
+  saveJsonBtn.addEventListener("click", () => {
+    const data = {
+      paths: paths,
+      zoom: zoom,
+      panX: panX,
+      panY: panY
+    };
+    const json = JSON.stringify(data);
+    const blob = new Blob([json], {type: "application/json"});
+    const url = URL.createObjectURL(blob);
+    
+    const link = document.createElement('a');
+    link.download = 'drawing.json';
+    link.href = url;
+    link.click();
+    
+    setTimeout(() => URL.revokeObjectURL(url), 100);
+  });
+
+  loadJsonBtn.addEventListener("click", () => {
+    jsonFileInput.click();
+  });
+
+  jsonFileInput.addEventListener("change", (e) => {
     const file = e.target.files[0];
+    if (!file) return;
+    
     const reader = new FileReader();
-    reader.onload = ()=>{
-      layers = JSON.parse(reader.result);
-      selectedLayer = layers[0]||null;
-      updateLayersUI();
-      drawAll();
+    reader.onload = (event) => {
+      try {
+        const data = JSON.parse(event.target.result);
+        paths = data.paths || [];
+        zoom = data.zoom || 1;
+        panX = data.panX || 0;
+        panY = data.panY || 0;
+        undonePaths = [];
+        drawAll();
+      } catch (err) {
+        alert("خطأ في تحميل الملف: " + err.message);
+      }
     };
     reader.readAsText(file);
-  };
-  input.click();
-};
-
-// ====== Export MP4 (Whammy.js) ======
-document.getElementById('exportMP4').onclick = ()=>{
-  const encoder = new Whammy.Video(fps);
-  layers.forEach(layer=>{
-    layer.objects.forEach(o=>{
-      drawAll();
-      encoder.add(ctx);
-    });
+    jsonFileInput.value = '';
   });
-  const output = encoder.compile();
-  const url = URL.createObjectURL(output);
-  const a = document.createElement('a');
-  a.href=url; a.download='animation.mp4';
-  a.click();
-};
 
+  undoBtn.addEventListener("click", () => {
+    if (paths.length > 0) {
+      undonePaths.push(paths.pop());
+      drawAll();
+    }
+  });
+
+  redoBtn.addEventListener("click", () => {
+    if (undonePaths.length > 0) {
+      paths.push(undonePaths.pop());
+      drawAll();
+    }
+  });
+
+  window.addEventListener("resize", () => {
+    width = window.innerWidth;
+    height = window.innerHeight - 50;
+    canvas.width = width;
+    canvas.height = height;
+    drawAll();
+  });
+
+  // Initial draw
+  drawAll();
 </script>
 </body>
 </html>
