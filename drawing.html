@@ -46,7 +46,7 @@
         .top-menu .left-section {
             order: 1;
         }
-        .top-menu .right-section button {
+        .top-menu .right-section .tool-button {
             background-color: #e846ff;
             color: white;
             padding: 8px 15px;
@@ -56,10 +56,13 @@
             font-size: 14px;
             font-weight: bold;
             text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 5px;
         }
         #logo-svg {
             height: 40px;
-            fill: white; /* Set logo to white */
+            fill: white;
         }
         .bottom-menu .left-section {
             display: flex;
@@ -109,12 +112,12 @@
         .side-panel {
             position: fixed;
             top: 60px;
-            left: -150px;
+            right: -170px; /* Adjusted to be completely hidden on the right side */
             width: 150px;
             height: calc(100% - 120px);
             background-color: #cd00e3;
             z-index: 11;
-            transition: left 0.3s ease-in-out;
+            transition: right 0.3s ease-in-out;
             padding: 20px 10px;
             display: flex;
             flex-direction: column;
@@ -122,7 +125,7 @@
             gap: 10px;
         }
         .side-panel.open {
-            left: 0;
+            right: 0;
         }
         .side-panel button {
             background-color: #e846ff;
@@ -136,6 +139,20 @@
             width: 100%;
             box-sizing: border-box;
         }
+        .color-input-container, .size-input-container {
+            position: relative;
+            display: inline-block;
+        }
+        .color-input-container input[type="color"],
+        .size-input-container input[type="number"] {
+            position: absolute;
+            top: 0;
+            right: 0;
+            opacity: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -143,14 +160,14 @@
 <div class="top-menu">
     <div class="right-section">
         <div class="button-group">
-            <label>
+            <div class="color-input-container">
                 <input type="color" id="colorPicker" value="#000000">
-                <button>🎨 اللون</button>
-            </label>
-            <label>
+                <button class="tool-button">🎨 اللون</button>
+            </div>
+            <div class="size-input-container">
                 <input type="number" id="brushSize" min="1" max="100" value="3" step="1">
-                <button>🖌️ الحجم</button>
-            </label>
+                <button class="tool-button">🖌️ الحجم</button>
+            </div>
         </div>
     </div>
     <div class="left-section">
@@ -178,7 +195,7 @@
                         <rect x="0.5" y="0.5" width="14" height="61" rx="6.5" fill="none"/>
                     </g>
                     <g id="Path_3" data-name="Path 3" transform="translate(45 108)" fill="white">
-                        <path d="M 39 21.49999618530273 L 6 21.49999618530273 C 2.967289924621582 21.49999618530273 0.5 19.03270721435547 0.5 15.99999618530273 L 0.5 -4.049997329711914 C 0.5686241984367371 -3.938495635986328 0.6374394297599792 -3.825043439865112 0.7022500038146973 -3.718193292617798 C 1.72107994556427 -2.038453340530396 3.260760068893433 0.4999966323375702 5.405210018157959 0.4999966323375702 L 39 0.4999966323375702 C 42.03271102905273 0.4999966323375702 44.5 2.967286586761475 44.5 5.999996662139893 L 44.5 15.99999618530273 C 44.5 19.03270721435547 42.03271102905273 21.49999618530273 39 21.49999618530273 Z" stroke="none"/>
+                        <path d="M 39 21.49999618530273 L 6 21.49999618530273 C 2.967289924621582 21.49999618530273 0.5 19.03270721435547 0.5 15.99999618530273 L 0.5 -4.049997329711914 C 0.5686241984367371 -3.938495635986328 0.6374394297599792 -3.82504343986512 0.7022500038146973 -3.718193292617798 C 1.72107994556427 -2.038453340530396 3.260760068893433 0.4999966323375702 5.405210018157959 0.4999966323375702 L 39 0.4999966323375702 C 42.03271102905273 0.4999966323375702 44.5 2.967286586761475 44.5 5.999996662139893 L 44.5 15.99999618530273 C 44.5 19.03270721435547 42.03271102905273 21.49999618530273 39 21.49999618530273 Z" stroke="none"/>
                         <path d="M 1 -2.296527862548828 L 1 15.99999618530273 C 1 18.75700759887695 3.242988586425781 20.99999618530273 6 20.99999618530273 L 39 20.99999618530273 C 41.75701141357422 20.99999618530273 44 18.75700759887695 44 15.99999618530273 L 44 5.999996185302734 C 44 3.242986679077148 41.75701141357422 0.9999961853027344 39 0.9999961853027344 L 5.405208587646484 0.9999961853027344 C 3.471275329589844 0.9999961853027344 2.044700622558594 -0.7052974700927734 1 -2.296527862548828 M 0.1917915344238281 -5.217250823974609 C 0.7787246704101562 -5.217250823974609 2.678031921386719 -3.814697265625e-06 5.405208587646484 -3.814697265625e-06 L 39 -3.814697265625e-06 C 42.3137092590332 -3.814697265625e-06 45 2.686286926269531 45 5.999996185302734 L 45 15.99999618530273 C 45 19.31370544433594 42.3137092590332 21.99999618530273 39 21.99999618530273 L 6 21.99999618530273 C 2.686290740966797 21.99999618530273 0 19.31370544433594 0 15.99999618530273 L 0 -4.389293670654297 C 0 -4.975826263427734 0.06555938720703125 -5.217250823974609 0.1917915344238281 -5.217250823974609 Z" stroke="none" fill="#e846ff"/>
                     </g>
                 </g>
@@ -200,6 +217,7 @@
 <div class="side-panel" id="sidePanel">
     <button id="saveJsonBtn">📁 حفظ JSON</button>
     <button id="loadJsonBtn">📂 فتح JSON</button>
+    <button id="exportPngBtn">🖼️ تصدير PNG</button>
     <button id="clearBtn">🧹 مسح</button>
 </div>
 
@@ -218,6 +236,7 @@
     const clearBtn = document.getElementById("clearBtn");
     const saveJsonBtn = document.getElementById("saveJsonBtn");
     const loadJsonBtn = document.getElementById("loadJsonBtn");
+    const exportPngBtn = document.getElementById("exportPngBtn");
     const jsonFileInput = document.getElementById("jsonFileInput");
     const zoomInfo = document.getElementById("zoomInfo");
     const dotsBtn = document.getElementById("dotsBtn");
@@ -296,7 +315,8 @@
     }
     
     // Toggle side panel
-    dotsBtn.addEventListener("click", () => {
+    dotsBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
         sidePanel.classList.toggle('open');
     });
 
@@ -525,6 +545,14 @@
         };
         reader.readAsText(file);
         jsonFileInput.value = '';
+    });
+    
+    exportPngBtn.addEventListener("click", () => {
+        const link = document.createElement('a');
+        link.download = 'drawing.png';
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+        sidePanel.classList.remove('open');
     });
 
     undoBtn.addEventListener("click", () => {
