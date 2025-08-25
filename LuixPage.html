@@ -1,555 +1,162 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="en" dir="ltr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Luix's Endless Drawing</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Luix - Endless Drawing</title>
     <style>
-        html, body {
+        /* Basic Colors */
+        :root {
+            --primary-color: #ff00ff; /* Bright purple */
+            --background-color: #ffffff;
+            --text-color: #333333;
+            --border-color: #ff00ff;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
             margin: 0;
             padding: 0;
-            overflow: hidden;
-            touch-action: none;
-            font-family: sans-serif;
-            background-color: #f0f0f0;
+            background-color: var(--background-color);
+            color: var(--text-color);
+            direction: ltr; /* Left-to-right text direction for English */
         }
-        .top-menu, .bottom-menu {
-            position: fixed;
-            left: 0;
-            right: 0;
-            background-color: #cd00e3;
-            padding: 10px;
+
+        /* General Layout */
+        .header {
+            color: var(--primary-color);
+            padding: 10px 20px;
             display: flex;
+            align-items: center;
             justify-content: space-between;
-            align-items: center;
-            z-index: 10;
+            margin: 10px;
         }
-        .top-menu {
-            top: 0;
+
+        .content {
+            min-height: calc(100vh - 100px);
+            padding: 20px;
+            border: 2px solid var(--border-color);
+            margin: 10px;
+            background-color: var(--background-color);
         }
-        .bottom-menu {
-            bottom: 0;
-        }
-        .top-menu .button-group {
-            display: flex;
-            gap: 10px;
-            align-items: center;
-        }
-        .top-menu .right-section, .top-menu .left-section {
+
+        .logo {
             display: flex;
             align-items: center;
-            gap: 10px;
-        }
-        .top-menu .right-section {
-            order: 2;
-        }
-        .top-menu .left-section {
-            order: 1;
-        }
-        .top-menu .right-section button {
-            background-color: #e846ff;
-            color: white;
-            padding: 8px 15px;
-            border-radius: 20px;
-            border: none;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: bold;
-            text-decoration: none;
-        }
-        #logo-svg {
-            height: 40px;
-            fill: white; /* Set logo to white */
-        }
-        .bottom-menu .left-section {
-            display: flex;
-            align-items: center;
-            padding-left: 20px;
-        }
-        .bottom-menu .left-section button {
-            background: none;
-            border: none;
-            color: white;
             font-size: 24px;
-            cursor: pointer;
-            padding: 0;
-        }
-        .bottom-menu .right-section button {
-            background-color: #e846ff;
-            color: white;
-            padding: 12px 20px;
-            border-radius: 20px;
-            border: none;
-            cursor: pointer;
-            font-size: 14px;
             font-weight: bold;
         }
-        canvas {
-            position: absolute;
-            top: 60px;
-            left: 0;
-            width: 100%;
-            height: calc(100% - 120px);
-            background: white;
-            touch-action: none;
+
+        .logo svg {
+            height: 40px; /* Control SVG logo size */
+            margin-right: 10px; /* Space after the logo for LTR */
         }
-        .zoom-info {
-            position: fixed;
-            bottom: 60px;
-            left: 10px;
-            background: rgba(0,0,0,0.5);
-            color: white;
+        
+        /* Navigation Menu */
+        .nav-menu .nav-item {
+            color: var(--primary-color);
+            text-decoration: none;
             padding: 5px 10px;
             border-radius: 5px;
-            font-size: 12px;
-        }
-        input[type="file"] {
-            display: none;
-        }
-        .side-panel {
-            position: fixed;
-            top: 60px;
-            left: -150px;
-            width: 150px;
-            height: calc(100% - 120px);
-            background-color: #cd00e3;
-            z-index: 11;
-            transition: left 0.3s ease-in-out;
-            padding: 20px 10px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 10px;
-        }
-        .side-panel.open {
-            left: 0;
-        }
-        .side-panel button {
-            background-color: #e846ff;
-            color: white;
-            padding: 10px 20px;
-            border-radius: 20px;
+            transition: background-color 0.3s ease;
+            /* Removed the border and background styles from the button to make it a link */
+            background-color: transparent;
             border: none;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: bold;
-            width: 100%;
-            box-sizing: border-box;
+            padding-left: 10px;
+            padding-right: 10px;
+        }
+
+        .nav-menu .nav-item.active {
+            background-color: rgba(255, 0, 255, 0.1);
+        }
+
+        .nav-menu .nav-item:hover {
+            background-color: rgba(255, 0, 255, 0.2);
+        }
+
+        /* Welcome Section */
+        .welcome-section h1 {
+            color: var(--primary-color);
+            font-size: 36px;
+            margin-bottom: 10px;
+        }
+
+        .welcome-section p {
+            color: var(--primary-color);
+            font-size: 18px;
+            line-height: 1.6;
+        }
+
+        /* Media Queries for Responsiveness */
+        @media (max-width: 768px) {
+            .header {
+                flex-direction: column;
+                text-align: center;
+            }
+
+            .nav-menu {
+                margin-top: 10px;
+            }
+
+            .nav-menu .nav-item {
+                display: block;
+                margin-bottom: 5px;
+            }
+
+            .welcome-section h1 {
+                font-size: 28px;
+            }
+
+            .welcome-section p {
+                font-size: 16px;
+            }
         }
     </style>
 </head>
 <body>
-
-<div class="top-menu">
-    <div class="right-section">
-        <div class="button-group">
-            <label>
-                <input type="color" id="colorPicker" value="#000000">
-                <button>🎨 اللون</button>
-            </label>
-            <label>
-                <input type="number" id="brushSize" min="1" max="100" value="3" step="1">
-                <button>🖌️ الحجم</button>
-            </label>
-        </div>
-    </div>
-    <div class="left-section">
-        <a href="#">
-            <svg id="logo-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 206.276 109">
+    <header class="header">
+        <div class="logo">
+            <svg xmlns="http://www.w3.org/2000/svg" width="206.276" height="109" viewBox="0 0 206.276 109">
                 <g id="Group_1" data-name="Group 1" transform="translate(-16 -21)">
-                    <g id="Rectangle_1" data-name="Rectangle 1" transform="translate(16 21)" fill="white" stroke="#e846ff" stroke-width="1">
+                    <g id="Rectangle_1" data-name="Rectangle 1" transform="translate(16 21)" fill="#cd00e3" stroke="#e846ff" stroke-width="1">
                         <rect width="30" height="109" rx="5" stroke="none"/>
                         <rect x="0.5" y="0.5" width="29" height="108" rx="4.5" fill="none"/>
                     </g>
-                    <g id="Path_2" data-name="Path 2" transform="translate(75 49)" fill="white">
+                    <g id="Path_2" data-name="Path 2" transform="translate(75 49)" fill="#cd00e3">
                         <path d="M 44 52.5 L 9 52.5 C 4.313079833984375 52.5 0.5 48.68692016601562 0.5 44 L 0.5 9 C 0.5 4.485292434692383 4.038429260253906 0.7813649773597717 8.487458229064941 0.5152738690376282 C 8.442087173461914 2.605597257614136 8.314802169799805 10.57339954376221 8.772190093994141 19.05171012878418 C 9.489359855651855 32.34571075439453 11.24147033691406 40.51564025878906 13.97984981536865 43.33457946777344 C 14.73106956481934 44.10789108276367 15.57026958465576 44.5 16.47414016723633 44.5 C 18.66972923278809 44.5 21.41645050048828 42.18362045288086 24.87125968933105 37.41849136352539 C 27.53119087219238 33.74972152709961 30.58935928344727 28.6405200958252 33.96081161499023 22.23282051086426 C 39.15440368652344 12.36199951171875 43.51874923706055 2.374166250228882 44.326416015625 0.5061835646629333 C 48.86270141601562 0.6782845854759216 52.5 4.422357559204102 52.5 9 L 52.5 44 C 52.5 48.68692016601562 48.68692016601562 52.5 44 52.5 Z" stroke="none"/>
                         <path d="M 44.64605712890625 1.025833129882812 C 43.55759811401367 3.529380798339844 39.35693740844727 13.05084609985352 34.40329742431641 22.46563911437988 C 31.02078056335449 28.89436912536621 27.9499397277832 34.02397918701172 25.27606010437012 37.71197891235352 C 23.66282081604004 39.93708801269531 22.16835975646973 41.66783142089844 20.83420944213867 42.85612106323242 C 19.21451950073242 44.29872894287109 17.788330078125 45 16.47414016723633 45 C 15.43001937866211 45 14.47014999389648 44.55688858032227 13.62120819091797 43.68296813964844 C 10.79621124267578 40.77487182617188 8.996791839599609 32.49678039550781 8.272911071777344 19.07863998413086 C 7.848670959472656 11.21461868286133 7.926422119140625 3.787933349609375 7.976398468017578 1.065174102783203 C 4.046863555908203 1.569316864013672 1 4.935569763183594 1 9 L 1 44 C 1 48.41120910644531 4.588790893554688 52 9 52 L 44 52 C 48.41120910644531 52 52 48.41120910644531 52 44 L 52 9 C 52 4.80633544921875 48.75621032714844 1.355953216552734 44.64605712890625 1.025833129882812 M 9 0 C 9 0 7.724140167236328 44 16.47414016723633 44 C 25.22414016723633 44 44 0 44 0 C 48.97055816650391 0 53 4.029441833496094 53 9 L 53 44 C 53 48.97055816650391 48.97055816650391 53 44 53 L 9 53 C 4.029441833496094 53 0 48.97055816650391 0 44 L 0 9 C 0 4.029441833496094 4.029441833496094 0 9 0 Z" stroke="none" fill="#e846ff"/>
                     </g>
-                    <g id="Rectangle_2" data-name="Rectangle 2" transform="translate(135 21)" fill="white" stroke="#e846ff" stroke-width="1">
+                    <g id="Rectangle_2" data-name="Rectangle 2" transform="translate(135 21)" fill="#cd00e3" stroke="#e846ff" stroke-width="1">
                         <rect width="21" height="109" rx="10" stroke="none"/>
                         <rect x="0.5" y="0.5" width="20" height="108" rx="9.5" fill="none"/>
                     </g>
-                    <g id="Path_4" data-name="Path 4" transform="translate(170.947 53.994) rotate(-34)" fill="white">
+                    <g id="Path_4" data-name="Path 4" transform="translate(170.947 53.994) rotate(-34)" fill="#cd00e3">
                         <path d="M 8 61.5 L 7 61.5 C 3.415889978408813 61.5 0.5 58.58411026000977 0.5 55 L 0.5 7 C 0.5 3.415889978408813 3.415889978408813 0.5 7 0.5 L 8 0.5 C 11.58411026000977 0.5 14.5 3.415889978408813 14.5 7 L 14.5 55 C 14.5 58.58411026000977 11.58411026000977 61.5 8 61.5 Z" stroke="none"/>
-                        <path d="M 7 1 C 3.691590309143066 1 1 3.69158935546875 1 7 L 1 55 C 1 58.30841064453125 3.691590309143066 61 7 61 L 8 61 C 11.30840969085693 61 14 58.30841064453125 14 55 L 14 7 C 14 3.69158935546875 11.30840969085693 1 8 1 L 7 1 M 7 0 L 8 0 C 11.86598968505859 0 15 3.134010314941406 15 7 L 15 55 C 15 58.86598968505859 11.86598968505859 62 8 62 L 7 62 C 3.134010314941406 62 0 58.86598968505859 0 55 L 0 7 C 0 3.134010314941406 3.134010314941406 0 7 0 Z" stroke="none" fill="#e846ff"/>
+                        <path d="M 7 1 C 3.691590309143066 1 1 3.69158935546875 1 7 L 1 55 C 1 58.30841064453125 3.691590309143066 61 7 61 L 8 61 C 11.30840969085693 61 14 58.30841064433594 14 55 L 14 7 C 14 3.69158935546875 11.30840969085693 1 8 1 L 7 1 M 7 0 L 8 0 C 11.86598968505859 0 15 3.134010314941406 15 7 L 15 55 C 15 58.86598968505859 11.86598968505859 62 8 62 L 7 62 C 3.134010314941406 62 0 58.86598968505859 0 55 L 0 7 C 0 3.134010314941406 3.134010314941406 0 7 0 Z" stroke="none" fill="#e846ff"/>
                     </g>
-                    <g id="Rectangle_4" data-name="Rectangle 4" transform="translate(211.67 49) rotate(45)" fill="white" stroke="#e846ff" stroke-width="1">
+                    <g id="Rectangle_4" data-name="Rectangle 4" transform="translate(211.67 49) rotate(45)" fill="#cd00e3" stroke="#e846ff" stroke-width="1">
                         <rect width="15" height="62" rx="7" stroke="none"/>
                         <rect x="0.5" y="0.5" width="14" height="61" rx="6.5" fill="none"/>
                     </g>
-                    <g id="Path_3" data-name="Path 3" transform="translate(45 108)" fill="white">
+                    <g id="Path_3" data-name="Path 3" transform="translate(45 108)" fill="#cd00e3">
                         <path d="M 39 21.49999618530273 L 6 21.49999618530273 C 2.967289924621582 21.49999618530273 0.5 19.03270721435547 0.5 15.99999618530273 L 0.5 -4.049997329711914 C 0.5686241984367371 -3.938495635986328 0.6374394297599792 -3.825043439865112 0.7022500038146973 -3.718193292617798 C 1.72107994556427 -2.038453340530396 3.260760068893433 0.4999966323375702 5.405210018157959 0.4999966323375702 L 39 0.4999966323375702 C 42.03271102905273 0.4999966323375702 44.5 2.967286586761475 44.5 5.999996662139893 L 44.5 15.99999618530273 C 44.5 19.03270721435547 42.03271102905273 21.49999618530273 39 21.49999618530273 Z" stroke="none"/>
                         <path d="M 1 -2.296527862548828 L 1 15.99999618530273 C 1 18.75700759887695 3.242988586425781 20.99999618530273 6 20.99999618530273 L 39 20.99999618530273 C 41.75701141357422 20.99999618530273 44 18.75700759887695 44 15.99999618530273 L 44 5.999996185302734 C 44 3.242986679077148 41.75701141357422 0.9999961853027344 39 0.9999961853027344 L 5.405208587646484 0.9999961853027344 C 3.471275329589844 0.9999961853027344 2.044700622558594 -0.7052974700927734 1 -2.296527862548828 M 0.1917915344238281 -5.217250823974609 C 0.7787246704101562 -5.217250823974609 2.678031921386719 -3.814697265625e-06 5.405208587646484 -3.814697265625e-06 L 39 -3.814697265625e-06 C 42.3137092590332 -3.814697265625e-06 45 2.686286926269531 45 5.999996185302734 L 45 15.99999618530273 C 45 19.31370544433594 42.3137092590332 21.99999618530273 39 21.99999618530273 L 6 21.99999618530273 C 2.686290740966797 21.99999618530273 0 19.31370544433594 0 15.99999618530273 L 0 -4.389293670654297 C 0 -4.975826263427734 0.06555938720703125 -5.217250823974609 0.1917915344238281 -5.217250823974609 Z" stroke="none" fill="#e846ff"/>
                     </g>
                 </g>
             </svg>
-        </a>
-    </div>
-</div>
+        </div>
+        <nav class="nav-menu">
+            <a href="#" class="nav-item active">Home.</a>
+            <a href="https://shenoxdev.github.io/Prjct-Luix/drawing.html" class="nav-item">Endless Drawing.</a>
+        </nav>
+    </header>
 
-<div class="bottom-menu">
-    <div class="right-section">
-        <button id="undoBtn">↩️ تراجع</button>
-        <button id="redoBtn">↪️ إعادة</button>
-    </div>
-    <div class="left-section">
-        <button id="dotsBtn">•••</button>
-    </div>
-</div>
-
-<div class="side-panel" id="sidePanel">
-    <button id="saveJsonBtn">📁 حفظ JSON</button>
-    <button id="loadJsonBtn">📂 فتح JSON</button>
-    <button id="clearBtn">🧹 مسح</button>
-</div>
-
-<canvas id="canvas"></canvas>
-<div class="zoom-info" id="zoomInfo">زوم: 1x</div>
-
-<input type="file" id="jsonFileInput" accept=".json">
-
-<script>
-    const canvas = document.getElementById("canvas");
-    const ctx = canvas.getContext("2d");
-    const colorPicker = document.getElementById("colorPicker");
-    const brushSize = document.getElementById("brushSize");
-    const undoBtn = document.getElementById("undoBtn");
-    const redoBtn = document.getElementById("redoBtn");
-    const clearBtn = document.getElementById("clearBtn");
-    const saveJsonBtn = document.getElementById("saveJsonBtn");
-    const loadJsonBtn = document.getElementById("loadJsonBtn");
-    const jsonFileInput = document.getElementById("jsonFileInput");
-    const zoomInfo = document.getElementById("zoomInfo");
-    const dotsBtn = document.getElementById("dotsBtn");
-    const sidePanel = document.getElementById("sidePanel");
-
-    let width = window.innerWidth;
-    let height = window.innerHeight - 120;
-    canvas.width = width;
-    canvas.height = height;
-
-    let paths = [];
-    let undonePaths = [];
-    let currentPath = null;
-    let drawing = false;
-    let hasMoved = false;
-    let lastX = 0;
-    let lastY = 0;
-
-    let zoom = 1;
-    let panX = 0;
-    let panY = 0;
-    let isZooming = false;
-    let lastTouchDist = 0;
-    let zoomEndTime = 0;
-    const ZOOM_COOLDOWN = 200;
-    const MIN_ZOOM = 1e-25;
-    const MAX_ZOOM = 1e25;
-
-    function updateZoomInfo() {
-        if (zoom < 0.0001 || zoom > 10000) {
-            zoomInfo.textContent = `زوم: ${zoom.toExponential(2)}x`;
-        } else {
-            zoomInfo.textContent = `زوم: ${zoom.toFixed(zoom >= 1 ? 2 : 8)}x`;
-        }
-    }
-
-    function drawAll() {
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.setTransform(zoom, 0, 0, zoom, panX, panY);
-
-        for (let path of paths) {
-            ctx.strokeStyle = path.color;
-            ctx.lineWidth = path.size;
-            ctx.lineCap = "round";
-            ctx.lineJoin = "round";
-            ctx.beginPath();
-            for (let i = 0; i < path.points.length - 1; i++) {
-                ctx.moveTo(path.points[i].x, path.points[i].y);
-                ctx.lineTo(path.points[i + 1].x, path.points[i + 1].y);
-            }
-            ctx.stroke();
-        }
-        updateZoomInfo();
-    }
-
-    function getCanvasPos(e) {
-        const rect = canvas.getBoundingClientRect();
-        return {
-            x: (e.clientX - rect.left - panX) / zoom,
-            y: (e.clientY - rect.top - panY) / zoom
-        };
-    }
-
-    function distance(t1, t2) {
-        return Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
-    }
-
-    function zoomToPoint(pointX, pointY, newZoom) {
-        const canvasX = pointX * zoom + panX;
-        const canvasY = pointY * zoom + panY;
-        zoom = Math.max(MIN_ZOOM, Math.min(newZoom, MAX_ZOOM));
-        panX = canvasX - pointX * zoom;
-        panY = canvasY - pointY * zoom;
-        drawAll();
-    }
-    
-    // Toggle side panel
-    dotsBtn.addEventListener("click", () => {
-        sidePanel.classList.toggle('open');
-    });
-
-    // Close side panel when clicking outside
-    document.addEventListener("click", (e) => {
-        if (!sidePanel.contains(e.target) && !dotsBtn.contains(e.target) && sidePanel.classList.contains('open')) {
-            sidePanel.classList.remove('open');
-        }
-    });
-
-    // Touch events
-    canvas.addEventListener("touchstart", (e) => {
-        e.preventDefault();
-        
-        if (e.touches.length === 2) {
-            isZooming = true;
-            lastTouchDist = distance(e.touches[0], e.touches[1]);
-        }
-        else if (e.touches.length === 1 && !isZooming && Date.now() - zoomEndTime > ZOOM_COOLDOWN) {
-            const pos = getCanvasPos(e.touches[0]);
-            lastX = pos.x;
-            lastY = pos.y;
-            currentPath = {
-                color: colorPicker.value,
-                size: parseFloat(brushSize.value),
-                points: []
-            };
-            drawing = true;
-            hasMoved = false;
-        }
-    });
-
-    canvas.addEventListener("touchmove", (e) => {
-        e.preventDefault();
-        
-        if (isZooming && e.touches.length === 2) {
-            const newDist = distance(e.touches[0], e.touches[1]);
-            const center = {
-                x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
-                y: (e.touches[0].clientY + e.touches[1].clientY) / 2
-            };
-            const point = {
-                x: (center.x - canvas.getBoundingClientRect().left - panX) / zoom,
-                y: (center.y - canvas.getBoundingClientRect().top - panY) / zoom
-            };
-            zoomToPoint(point.x, point.y, zoom * (newDist / lastTouchDist));
-            lastTouchDist = newDist;
-        }
-        else if (drawing && e.touches.length === 1 && !isZooming) {
-            const touch = e.touches[0];
-            const pos = getCanvasPos(touch);
-            
-            const dx = pos.x - lastX;
-            const dy = pos.y - lastY;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-            
-            if (dist > 0.5) {
-                if (!hasMoved) {
-                    currentPath.points.push({x: lastX, y: lastY});
-                    hasMoved = true;
-                }
-                currentPath.points.push(pos);
-                
-                ctx.strokeStyle = currentPath.color;
-                ctx.lineWidth = currentPath.size;
-                ctx.lineCap = "round";
-                ctx.beginPath();
-                ctx.moveTo(lastX, lastY);
-                ctx.lineTo(pos.x, pos.y);
-                ctx.stroke();
-                
-                lastX = pos.x;
-                lastY = pos.y;
-            }
-        }
-    });
-
-    canvas.addEventListener("touchend", (e) => {
-        if (isZooming) {
-            isZooming = false;
-            zoomEndTime = Date.now();
-        }
-        
-        if (drawing && hasMoved && currentPath.points.length > 1) {
-            paths.push(currentPath);
-            undonePaths = [];
-        }
-        drawing = false;
-        currentPath = null;
-        hasMoved = false;
-    });
-
-    // Mouse events (for desktop)
-    canvas.addEventListener("mousedown", (e) => {
-        if (e.button === 0 && Date.now() - zoomEndTime > ZOOM_COOLDOWN) {
-            const pos = getCanvasPos(e);
-            lastX = pos.x;
-            lastY = pos.y;
-            currentPath = {
-                color: colorPicker.value,
-                size: parseFloat(brushSize.value),
-                points: []
-            };
-            drawing = true;
-            hasMoved = false;
-        }
-    });
-
-    canvas.addEventListener("mousemove", (e) => {
-        if (drawing) {
-            const pos = getCanvasPos(e);
-            
-            const dx = pos.x - lastX;
-            const dy = pos.y - lastY;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-            
-            if (dist > 0.5) {
-                if (!hasMoved) {
-                    currentPath.points.push({x: lastX, y: lastY});
-                    hasMoved = true;
-                }
-                currentPath.points.push(pos);
-                
-                ctx.strokeStyle = currentPath.color;
-                ctx.lineWidth = currentPath.size;
-                ctx.lineCap = "round";
-                ctx.beginPath();
-                ctx.moveTo(lastX, lastY);
-                ctx.lineTo(pos.x, pos.y);
-                ctx.stroke();
-                
-                lastX = pos.x;
-                lastY = pos.y;
-            }
-        }
-    });
-
-    canvas.addEventListener("mouseup", (e) => {
-        if (e.button === 0 && drawing && hasMoved && currentPath.points.length > 1) {
-            paths.push(currentPath);
-            undonePaths = [];
-        }
-        drawing = false;
-        currentPath = null;
-        hasMoved = false;
-    });
-
-    canvas.addEventListener("mouseleave", () => {
-        if (drawing && hasMoved && currentPath.points.length > 1) {
-            paths.push(currentPath);
-            undonePaths = [];
-        }
-        drawing = false;
-        currentPath = null;
-        hasMoved = false;
-    });
-
-    canvas.addEventListener("wheel", (e) => {
-        e.preventDefault();
-        const rect = canvas.getBoundingClientRect();
-        const cursorX = e.clientX - rect.left;
-        const cursorY = e.clientY - rect.top;
-
-        const canvasPointX = (cursorX - panX) / zoom;
-        const canvasPointY = (cursorY - panY) / zoom;
-        
-        const zoomDelta = e.deltaY > 0 ? 0.9 : 1.1;
-        const newZoom = zoom * zoomDelta;
-
-        zoomToPoint(canvasPointX, canvasPointY, newZoom);
-    });
-
-    // Button handlers
-    clearBtn.addEventListener("click", () => {
-        paths = [];
-        undonePaths = [];
-        zoom = 1;
-        panX = 0;
-        panY = 0;
-        drawAll();
-        sidePanel.classList.remove('open');
-    });
-
-    saveJsonBtn.addEventListener("click", () => {
-        const data = {
-            paths: paths,
-            zoom: zoom,
-            panX: panX,
-            panY: panY
-        };
-        const json = JSON.stringify(data);
-        const blob = new Blob([json], {type: "application/json"});
-        const url = URL.createObjectURL(blob);
-        
-        const link = document.createElement('a');
-        link.download = 'drawing.json';
-        link.href = url;
-        link.click();
-        
-        setTimeout(() => URL.revokeObjectURL(url), 100);
-        sidePanel.classList.remove('open');
-    });
-
-    loadJsonBtn.addEventListener("click", () => {
-        jsonFileInput.click();
-        sidePanel.classList.remove('open');
-    });
-
-    jsonFileInput.addEventListener("change", (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            try {
-                const data = JSON.parse(event.target.result);
-                paths = data.paths || [];
-                zoom = data.zoom || 1;
-                panX = data.panX || 0;
-                panY = data.panY || 0;
-                undonePaths = [];
-                drawAll();
-            } catch (err) {
-                alert("خطأ في تحميل الملف: " + err.message);
-            }
-        };
-        reader.readAsText(file);
-        jsonFileInput.value = '';
-    });
-
-    undoBtn.addEventListener("click", () => {
-        if (paths.length > 0) {
-            undonePaths.push(paths.pop());
-            drawAll();
-        }
-    });
-
-    redoBtn.addEventListener("click", () => {
-        if (undonePaths.length > 0) {
-            paths.push(undonePaths.pop());
-            drawAll();
-        }
-    });
-
-    window.addEventListener("resize", () => {
-        width = window.innerWidth;
-        height = window.innerHeight - 120;
-        canvas.width = width;
-        canvas.height = height;
-        drawAll();
-    });
-
-    drawAll();
-</script>
+    <main class="content">
+        <section class="welcome-section">
+            <h1>Welcome To Luix,</h1>
+            <p>this is the first version of Luix`s,</p>
+            <p>Animation Maker Soon!.</p>
+        </section>
+    </main>
 </body>
 </html>
