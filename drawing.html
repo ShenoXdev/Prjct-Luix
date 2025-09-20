@@ -1,4 +1,6 @@
-<!DOCTYPE html>
+
+  </style>
+</head><!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8">
@@ -47,8 +49,6 @@
     input[type="file"] {
       display: none;
     }
-  </style>
-</head>
 <body>
 
 <div id="menu">
@@ -265,6 +265,322 @@
         if (!hasMoved) {
           currentPath.points.push({x: lastX, y: lastY});
           hasMoved = true;
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Luix`s Endless Drawing (Team)</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      touch-action: none;
+      font-family: sans-serif;
+    }
+    #menu {
+      position: fixed;
+      top: 0;
+      right: 0;
+      left: 0;
+      background: #f0f0f0;
+      padding: 10px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      z-index: 10;
+    }
+    canvas {
+      position: absolute;
+      top: 50px;
+      left: 0;
+      width: 100%;
+      height: calc(100% - 50px);
+      background: white;
+      touch-action: none;
+    }
+    .zoom-info {
+      position: fixed;
+      bottom: 10px;
+      left: 10px;
+      background: rgba(0,0,0,0.5);
+      color: white;
+      padding: 5px 10px;
+      border-radius: 5px;
+      font-size: 12px;
+    }
+    input[type="file"] {
+      display: none;
+    }
+    /* small style for room UI */
+    #roomControls { display:flex; gap:8px; align-items:center; }
+    #roomCodeDisplay { font-weight:700; margin-left:6px; }
+  </style>
+</head>
+<body>
+
+<div id="menu">
+  <label>🎨 اللون: <input type="color" id="colorPicker" value="#000000"></label>
+  <label>🖌️ الحجم: <input type="number" id="brushSize" min="1" max="100" value="3" step="1"></label>
+  <button id="undoBtn">↩️ تراجع</button>
+  <button id="redoBtn">↪️ إعادة</button>
+  <button id="clearBtn">🧹 مسح</button>
+  <button id="saveBtn">💾 حفظ صورة</button>
+  <button id="saveJsonBtn">📁 حفظ JSON</button>
+  <button id="loadJsonBtn">📂 فتح JSON</button>
+  <input type="file" id="jsonFileInput" accept=".json">
+
+  <!-- Room controls added (Team) -->
+  <div id="roomControls">
+    <button id="newRoomBtn">➕ New Room</button>
+    <input type="text" id="roomCodeInput" placeholder="Enter Room Code" style="padding:6px;border-radius:6px;">
+    <button id="joinRoomBtn">🔗 Join</button>
+    <span id="roomCodeDisplay">—</span>
+  </div>
+</div>
+
+<canvas id="canvas"></canvas>
+<div class="zoom-info" id="zoomInfo">زوم: 1x</div>
+
+<!-- Firebase compat (سهلة الاستعمال مع الكود الحالي) -->
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+
+<script>
+  /***********************
+   * Firebase config
+   * (انت بالفعل عطيت القيم دي؛ لو حبيت تغير مشروع استخدم قيم مشروعك)
+   ***********************/
+  const firebaseConfig = {
+    apiKey: "AIzaSyC6PieefR4_qJwC6NXdJNN16GNyBu7UQOw",
+    authDomain: "endless-drawing.firebaseapp.com",
+    databaseURL: "https://endless-drawing-default-rtdb.firebaseio.com",
+    projectId: "endless-drawing",
+    storageBucket: "endless-drawing.firebasestorage.app",
+    messagingSenderId: "193053808478",
+    appId: "1:193053808478:web:fd0c700ca0a94f584fe1cf",
+    measurementId: "G-8L79M10CBR"
+  };
+
+  // init firebase
+  let firebaseEnabled = false;
+  try {
+    firebase.initializeApp(firebaseConfig);
+    var db = firebase.database();
+    firebaseEnabled = true;
+  } catch (e) {
+    console.warn("Firebase init failed:", e);
+    firebaseEnabled = false;
+  }
+
+  // unique client id to avoid echoing our own messages
+  const clientId = Math.random().toString(36).substring(2, 10);
+
+  /***********************
+   * Original drawing code (unchanged logic & var names)
+   ***********************/
+  const canvas = document.getElementById("canvas");
+  const ctx = canvas.getContext("2d");
+  const colorPicker = document.getElementById("colorPicker");
+  const brushSize = document.getElementById("brushSize");
+  const undoBtn = document.getElementById("undoBtn");
+  const redoBtn = document.getElementById("redoBtn");
+  const clearBtn = document.getElementById("clearBtn");
+  const saveBtn = document.getElementById("saveBtn");
+  const saveJsonBtn = document.getElementById("saveJsonBtn");
+  const loadJsonBtn = document.getElementById("loadJsonBtn");
+  const jsonFileInput = document.getElementById("jsonFileInput");
+  const zoomInfo = document.getElementById("zoomInfo");
+
+  // Initialize canvas
+  let width = window.innerWidth;
+  let height = window.innerHeight - 50;
+  canvas.width = width;
+  canvas.height = height;
+
+  // Drawing state
+  let paths = [];
+  let undonePaths = [];
+  let currentPath = null;
+  let drawing = false;
+  let hasMoved = false;
+  let lastX = 0;
+  let lastY = 0;
+
+  // Zoom state
+  let zoom = 1;
+  let panX = 0;
+  let panY = 0;
+  let isZooming = false;
+  let lastTouchDist = 0;
+  let zoomEndTime = 0;
+  const ZOOM_COOLDOWN = 200;
+  const MIN_ZOOM = 1e-25; // 0.0000000000000000000000001
+  const MAX_ZOOM = 1e25;
+
+  function updateZoomInfo() {
+    if (zoom < 0.0001 || zoom > 10000) {
+      zoomInfo.textContent = `زوم: ${zoom.toExponential(2)}x`;
+    } else {
+      zoomInfo.textContent = `زوم: ${zoom.toFixed(zoom >= 1 ? 2 : 8)}x`;
+    }
+  }
+
+  function drawAll() {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.setTransform(zoom, 0, 0, zoom, panX, panY);
+
+    for (let path of paths) {
+      ctx.strokeStyle = path.color;
+      ctx.lineWidth = path.size;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.beginPath();
+      for (let i = 0; i < path.points.length - 1; i++) {
+        ctx.moveTo(path.points[i].x, path.points[i].y);
+        ctx.lineTo(path.points[i + 1].x, path.points[i + 1].y);
+      }
+      ctx.stroke();
+    }
+    updateZoomInfo();
+  }
+
+  function getCanvasPos(e) {
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: (e.clientX - rect.left - panX) / zoom,
+      y: (e.clientY - rect.top - panY) / zoom
+    };
+  }
+
+  function distance(t1, t2) {
+    return Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+  }
+
+  function zoomToPoint(pointX, pointY, newZoom) {
+    const canvasX = pointX * zoom + panX;
+    const canvasY = pointY * zoom + panY;
+    zoom = Math.max(MIN_ZOOM, Math.min(newZoom, MAX_ZOOM));
+    panX = canvasX - pointX * zoom;
+    panY = canvasY - pointY * zoom;
+    drawAll();
+  }
+
+  // Touch events
+  canvas.addEventListener("touchstart", (e) => {
+    e.preventDefault();
+    
+    if (e.touches.length === 2) {
+      isZooming = true;
+      lastTouchDist = distance(e.touches[0], e.touches[1]);
+    } 
+    else if (e.touches.length === 1 && !isZooming && Date.now() - zoomEndTime > ZOOM_COOLDOWN) {
+      const pos = getCanvasPos(e.touches[0]);
+      lastX = pos.x;
+      lastY = pos.y;
+      currentPath = {
+        color: colorPicker.value,
+        size: parseFloat(brushSize.value),
+        points: []
+      };
+      drawing = true;
+      hasMoved = false;
+    }
+  });
+
+  canvas.addEventListener("touchmove", (e) => {
+    e.preventDefault();
+    
+    if (isZooming && e.touches.length === 2) {
+      const newDist = distance(e.touches[0], e.touches[1]);
+      const center = {
+        x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+        y: (e.touches[0].clientY + e.touches[1].clientY) / 2
+      };
+      const point = {
+        x: (center.x - canvas.getBoundingClientRect().left - panX) / zoom,
+        y: (center.y - canvas.getBoundingClientRect().top - panY) / zoom
+      };
+      zoomToPoint(point.x, point.y, zoom * (newDist / lastTouchDist));
+      lastTouchDist = newDist;
+    } 
+    else if (drawing && e.touches.length === 1 && !isZooming) {
+      const touch = e.touches[0];
+      const pos = getCanvasPos(touch);
+      
+      const dx = pos.x - lastX;
+      const dy = pos.y - lastY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      
+      if (dist > 0.5) {
+        if (!hasMoved) {
+          currentPath.points.push({x: lastX, y: lastY});
+          hasMoved = true;
+        }
+        currentPath.points.push(pos);
+        
+        ctx.strokeStyle = currentPath.color;
+        ctx.lineWidth = currentPath.size;
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(lastX, lastY);
+        ctx.lineTo(pos.x, pos.y);
+        ctx.stroke();
+        
+        lastX = pos.x;
+        lastY = pos.y;
+      }
+    }
+  });
+
+  canvas.addEventListener("touchend", (e) => {
+    if (isZooming) {
+      isZooming = false;
+      zoomEndTime = Date.now();
+    }
+    
+    if (drawing && hasMoved && currentPath.points.length > 1) {
+      paths.push(currentPath);
+      undonePaths = [];
+      // send to room
+      sendLocalPathToRoom(currentPath);
+    }
+    drawing = false;
+    currentPath = null;
+    hasMoved = false;
+  });
+
+  // Mouse events (for desktop)
+  canvas.addEventListener("mousedown", (e) => {
+    if (Date.now() - zoomEndTime > ZOOM_COOLDOWN) {
+      const pos = getCanvasPos(e);
+      lastX = pos.x;
+      lastY = pos.y;
+      currentPath = {
+        color: colorPicker.value,
+        size: parseFloat(brushSize.value),
+        points: []
+      };
+      drawing = true;
+      hasMoved = false;
+    }
+  });
+
+  canvas.addEventListener("mousemove", (e) => {
+    if (drawing) {
+      const pos = getCanvasPos(e);
+      
+      const dx = pos.x - lastX;
+      const dy = pos.y - lastY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      
+      if (dist > 0.5) {
+        if (!hasMoved) {
+          currentPath.points.push({x: lastX, y: lastY});
+          hasMoved = true;
         }
         currentPath.points.push(pos);
         
@@ -286,6 +602,8 @@
     if (drawing && hasMoved && currentPath.points.length > 1) {
       paths.push(currentPath);
       undonePaths = [];
+      // send to room
+      sendLocalPathToRoom(currentPath);
     }
     drawing = false;
     currentPath = null;
@@ -296,6 +614,8 @@
     if (drawing && hasMoved && currentPath.points.length > 1) {
       paths.push(currentPath);
       undonePaths = [];
+      // send to room
+      sendLocalPathToRoom(currentPath);
     }
     drawing = false;
     currentPath = null;
@@ -310,6 +630,8 @@
     panX = 0;
     panY = 0;
     drawAll();
+    // notify room
+    sendClearToRoom();
   });
 
   saveBtn.addEventListener("click", () => {
@@ -368,6 +690,7 @@
     if (paths.length > 0) {
       undonePaths.push(paths.pop());
       drawAll();
+      // (optional) you could sync undo with room via event - not implemented
     }
   });
 
@@ -375,6 +698,7 @@
     if (undonePaths.length > 0) {
       paths.push(undonePaths.pop());
       drawAll();
+      // (optional) you could sync redo with room via event - not implemented
     }
   });
 
@@ -388,6 +712,111 @@
 
   // Initial draw
   drawAll();
+
+  /***********************
+   * Team/Firebase sync functions (مضافة فقط للتزامن)
+   * ملاحظة: مش بتغير أي من دوال الرسم أو متغيراته.
+   ***********************/
+  const newRoomBtn = document.getElementById("newRoomBtn");
+  const joinRoomBtn = document.getElementById("joinRoomBtn");
+  const roomCodeInput = document.getElementById("roomCodeInput");
+  const roomCodeDisplay = document.getElementById("roomCodeDisplay");
+
+  let currentRoom = null;
+  let pathsRef = null;
+  let eventsRef = null;
+  let listenersAttached = false;
+
+  function sendLocalPathToRoom(path) {
+    if (!firebaseEnabled || !currentRoom) return;
+    try {
+      // include clientId to avoid echo
+      firebase.database().ref(`rooms/${currentRoom}/paths`).push({ clientId, path });
+    } catch (err) {
+      console.warn("sendLocalPathToRoom err:", err);
+    }
+  }
+
+  function sendClearToRoom() {
+    if (!firebaseEnabled || !currentRoom) return;
+    try {
+      firebase.database().ref(`rooms/${currentRoom}/events`).push({ clientId, type: "clear", timestamp: Date.now() });
+    } catch (err) {
+      console.warn("sendClearToRoom err:", err);
+    }
+  }
+
+  function attachRoomListeners(room) {
+    if (!firebaseEnabled || !room) return;
+    // detach previous listeners if any (simple approach: reload refs)
+    if (pathsRef) {
+      try { pathsRef.off(); } catch(e){}
+    }
+    if (eventsRef) {
+      try { eventsRef.off(); } catch(e){}
+    }
+
+    pathsRef = firebase.database().ref(`rooms/${room}/paths`);
+    eventsRef = firebase.database().ref(`rooms/${room}/events`);
+
+    // When a new path added
+    pathsRef.on('child_added', snapshot => {
+      const val = snapshot.val();
+      if (!val) return;
+      // ignore our own pushed paths
+      if (val.clientId === clientId) return;
+      if (val.path) {
+        // push remote path and redraw
+        paths.push(val.path);
+        drawAll();
+      }
+    });
+
+    // listen for events (clear)
+    eventsRef.on('child_added', snapshot => {
+      const ev = snapshot.val();
+      if (!ev) return;
+      if (ev.type === "clear") {
+        // apply clear from others
+        paths = [];
+        undonePaths = [];
+        drawAll();
+      }
+    });
+
+    listenersAttached = true;
+  }
+
+  newRoomBtn.addEventListener('click', () => {
+    if (!firebaseEnabled) { alert("Firebase مش شغّال أو مش معدّ. اتأكد من config."); return; }
+    const code = Math.random().toString(36).substring(2,8).toUpperCase();
+    currentRoom = code;
+    // create room root (optional)
+    firebase.database().ref(`rooms/${currentRoom}`).set({ created: Date.now() });
+    roomCodeDisplay.textContent = currentRoom;
+    // clear local and attach listeners
+    paths = [];
+    undonePaths = [];
+    drawAll();
+    attachRoomListeners(currentRoom);
+    alert("Room created: " + currentRoom);
+  });
+
+  joinRoomBtn.addEventListener('click', () => {
+    if (!firebaseEnabled) { alert("Firebase مش شغّال أو مش معدّ. اتأكد من config."); return; }
+    const code = (roomCodeInput.value || "").trim().toUpperCase();
+    if (!code) return alert("اكتب كود الروم!");
+    currentRoom = code;
+    roomCodeDisplay.textContent = currentRoom;
+    // clear local then attach listeners (will populate from DB)
+    paths = [];
+    undonePaths = [];
+    drawAll();
+    attachRoomListeners(currentRoom);
+    alert("Joined room: " + currentRoom);
+  });
+
+  // done
 </script>
 </body>
 </html>
