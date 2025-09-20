@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Luix`s Endless Drawing (Team)</title>
+  <title>Luix`s Endless Drawing (Team) - متزامن</title>
   <style>
     html, body {
       margin: 0;
@@ -47,9 +47,54 @@
     input[type="file"] {
       display: none;
     }
-    /* small style for room UI */
-    #roomControls { display:flex; gap:8px; align-items:center; }
-    #roomCodeDisplay { font-weight:700; margin-left:6px; }
+    /* Room UI styles */
+    #roomControls { 
+      display:flex; 
+      gap:8px; 
+      align-items:center; 
+      margin-right: auto;
+    }
+    #roomCodeDisplay { 
+      font-weight:700; 
+      margin-left:6px; 
+      background: #4CAF50;
+      color: white;
+      padding: 4px 8px;
+      border-radius: 4px;
+    }
+    .room-status {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .status-indicator {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .status-connected {
+      background-color: #4CAF50;
+    }
+    .status-disconnected {
+      background-color: #f44336;
+    }
+    .sync-notification {
+      position: fixed;
+      bottom: 40px;
+      left: 10px;
+      background: rgba(0,0,0,0.7);
+      color: white;
+      padding: 8px 12px;
+      border-radius: 5px;
+      font-size: 12px;
+      opacity: 0;
+      transition: opacity 0.3s;
+      pointer-events: none;
+    }
+    .sync-notification.show {
+      opacity: 1;
+    }
   </style>
 </head>
 <body>
@@ -65,26 +110,31 @@
   <button id="loadJsonBtn">📂 فتح JSON</button>
   <input type="file" id="jsonFileInput" accept=".json">
 
-  <!-- Room controls added (Team) -->
+  <!-- Room controls -->
   <div id="roomControls">
-    <button id="newRoomBtn">➕ New Room</button>
-    <input type="text" id="roomCodeInput" placeholder="Enter Room Code" style="padding:6px;border-radius:6px;">
-    <button id="joinRoomBtn">🔗 Join</button>
-    <span id="roomCodeDisplay">—</span>
+    <div class="room-status">
+      <span class="status-indicator" id="connectionStatus"></span>
+      <span>الغرفة:</span>
+      <span id="roomCodeDisplay">—</span>
+    </div>
+    <button id="newRoomBtn">➕ جديد</button>
+    <input type="text" id="roomCodeInput" placeholder="كود الغرفة" style="padding:6px;border-radius:6px;width: 100px;">
+    <button id="joinRoomBtn">🔗 انضم</button>
+    <button id="leaveRoomBtn" style="display:none;">👋 غادر</button>
   </div>
 </div>
 
 <canvas id="canvas"></canvas>
 <div class="zoom-info" id="zoomInfo">زوم: 1x</div>
+<div class="sync-notification" id="syncNotification">يتم المزامنة...</div>
 
-<!-- Firebase compat (سهلة الاستعمال مع الكود الحالي) -->
+<!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 
 <script>
   /***********************
    * Firebase config
-   * (انت بالفعل عطيت القيم دي؛ لو حبيت تغير مشروع استخدم قيم مشروعك)
    ***********************/
   const firebaseConfig = {
     apiKey: "AIzaSyC6PieefR4_qJwC6NXdJNN16GNyBu7UQOw",
@@ -112,7 +162,7 @@
   const clientId = Math.random().toString(36).substring(2, 10);
 
   /***********************
-   * Original drawing code (unchanged logic & var names)
+   * Original drawing code
    ***********************/
   const canvas = document.getElementById("canvas");
   const ctx = canvas.getContext("2d");
@@ -126,6 +176,8 @@
   const loadJsonBtn = document.getElementById("loadJsonBtn");
   const jsonFileInput = document.getElementById("jsonFileInput");
   const zoomInfo = document.getElementById("zoomInfo");
+  const connectionStatus = document.getElementById("connectionStatus");
+  const syncNotification = document.getElementById("syncNotification");
 
   // Initialize canvas
   let width = window.innerWidth;
@@ -150,8 +202,20 @@
   let lastTouchDist = 0;
   let zoomEndTime = 0;
   const ZOOM_COOLDOWN = 200;
-  const MIN_ZOOM = 1e-25; // 0.0000000000000000000000001
+  const MIN_ZOOM = 1e-25;
   const MAX_ZOOM = 1e25;
+
+  // Sync state
+  let isSyncing = false;
+  let currentPathId = null; // لتتبع المسار الحالي في Firebase
+
+  function showSyncNotification(message, duration = 2000) {
+    syncNotification.textContent = message;
+    syncNotification.classList.add('show');
+    setTimeout(() => {
+      syncNotification.classList.remove('show');
+    }, duration);
+  }
 
   function updateZoomInfo() {
     if (zoom < 0.0001 || zoom > 10000) {
@@ -217,10 +281,15 @@
       currentPath = {
         color: colorPicker.value,
         size: parseFloat(brushSize.value),
-        points: []
+        points: [{x: lastX, y: lastY}]
       };
       drawing = true;
       hasMoved = false;
+      
+      // إنشاء مسار جديد في Firebase فوراً
+      if (firebaseEnabled && currentRoom) {
+        currentPathId = sendPathStartToRoom(currentPath);
+      }
     }
   });
 
@@ -250,7 +319,6 @@
       
       if (dist > 0.5) {
         if (!hasMoved) {
-          currentPath.points.push({x: lastX, y: lastY});
           hasMoved = true;
         }
         currentPath.points.push(pos);
@@ -265,6 +333,11 @@
         
         lastX = pos.x;
         lastY = pos.y;
+        
+        // إرسال النقطة الجديدة إلى Firebase فوراً
+        if (firebaseEnabled && currentRoom && currentPathId) {
+          updatePathInRoom(currentPathId, pos);
+        }
       }
     }
   });
@@ -278,12 +351,16 @@
     if (drawing && hasMoved && currentPath.points.length > 1) {
       paths.push(currentPath);
       undonePaths = [];
-      // send to room
-      sendLocalPathToRoom(currentPath);
+      
+      // إكمال المسار في Firebase
+      if (firebaseEnabled && currentRoom && currentPathId) {
+        completePathInRoom(currentPathId);
+      }
     }
     drawing = false;
     currentPath = null;
     hasMoved = false;
+    currentPathId = null;
   });
 
   // Mouse events (for desktop)
@@ -295,10 +372,15 @@
       currentPath = {
         color: colorPicker.value,
         size: parseFloat(brushSize.value),
-        points: []
+        points: [{x: lastX, y: lastY}]
       };
       drawing = true;
       hasMoved = false;
+      
+      // إنشاء مسار جديد في Firebase فوراً
+      if (firebaseEnabled && currentRoom) {
+        currentPathId = sendPathStartToRoom(currentPath);
+      }
     }
   });
 
@@ -312,7 +394,6 @@
       
       if (dist > 0.5) {
         if (!hasMoved) {
-          currentPath.points.push({x: lastX, y: lastY});
           hasMoved = true;
         }
         currentPath.points.push(pos);
@@ -327,6 +408,11 @@
         
         lastX = pos.x;
         lastY = pos.y;
+        
+        // إرسال النقطة الجديدة إلى Firebase فوراً
+        if (firebaseEnabled && currentRoom && currentPathId) {
+          updatePathInRoom(currentPathId, pos);
+        }
       }
     }
   });
@@ -335,24 +421,32 @@
     if (drawing && hasMoved && currentPath.points.length > 1) {
       paths.push(currentPath);
       undonePaths = [];
-      // send to room
-      sendLocalPathToRoom(currentPath);
+      
+      // إكمال المسار في Firebase
+      if (firebaseEnabled && currentRoom && currentPathId) {
+        completePathInRoom(currentPathId);
+      }
     }
     drawing = false;
     currentPath = null;
     hasMoved = false;
+    currentPathId = null;
   });
 
   canvas.addEventListener("mouseleave", () => {
     if (drawing && hasMoved && currentPath.points.length > 1) {
       paths.push(currentPath);
       undonePaths = [];
-      // send to room
-      sendLocalPathToRoom(currentPath);
+      
+      // إكمال المسار في Firebase
+      if (firebaseEnabled && currentRoom && currentPathId) {
+        completePathInRoom(currentPathId);
+      }
     }
     drawing = false;
     currentPath = null;
     hasMoved = false;
+    currentPathId = null;
   });
 
   // Button handlers
@@ -405,12 +499,12 @@
     reader.onload = (event) => {
       try {
         const data = JSON.parse(event.target.result);
-        paths = data.paths || [];
-        zoom = data.zoom || 1;
-        panX = data.panX || 0;
-        panY = data.panY || 0;
-        undonePaths = [];
-        drawAll();
+        loadJsonData(data);
+        
+        // Send to room if connected
+        if (firebaseEnabled && currentRoom) {
+          sendJsonToRoom(data);
+        }
       } catch (err) {
         alert("خطأ في تحميل الملف: " + err.message);
       }
@@ -421,17 +515,23 @@
 
   undoBtn.addEventListener("click", () => {
     if (paths.length > 0) {
-      undonePaths.push(paths.pop());
+      const undonePath = paths.pop();
+      undonePaths.push(undonePath);
       drawAll();
-      // (optional) you could sync undo with room via event - not implemented
+      
+      // Send undo action to room
+      sendUndoToRoom();
     }
   });
 
   redoBtn.addEventListener("click", () => {
     if (undonePaths.length > 0) {
-      paths.push(undonePaths.pop());
+      const redonePath = undonePaths.pop();
+      paths.push(redonePath);
       drawAll();
-      // (optional) you could sync redo with room via event - not implemented
+      
+      // Send redo action to room
+      sendRedoToRoom();
     }
   });
 
@@ -447,84 +547,266 @@
   drawAll();
 
   /***********************
-   * Team/Firebase sync functions (مضافة فقط للتزامن)
-   * ملاحظة: مش بتغير أي من دوال الرسم أو متغيراته.
+   * Team/Firebase sync functions
    ***********************/
   const newRoomBtn = document.getElementById("newRoomBtn");
   const joinRoomBtn = document.getElementById("joinRoomBtn");
+  const leaveRoomBtn = document.getElementById("leaveRoomBtn");
   const roomCodeInput = document.getElementById("roomCodeInput");
   const roomCodeDisplay = document.getElementById("roomCodeDisplay");
 
   let currentRoom = null;
   let pathsRef = null;
   let eventsRef = null;
+  let historyRef = null;
+  let activePathsRef = null;
   let listenersAttached = false;
 
-  function sendLocalPathToRoom(path) {
-    if (!firebaseEnabled || !currentRoom) return;
+  function updateConnectionStatus(connected) {
+    if (connected) {
+      connectionStatus.className = "status-indicator status-connected";
+    } else {
+      connectionStatus.className = "status-indicator status-disconnected";
+    }
+  }
+
+  function loadJsonData(data) {
+    isSyncing = true;
+    paths = data.paths || [];
+    zoom = data.zoom || 1;
+    panX = data.panX || 0;
+    panY = data.panY || 0;
+    undonePaths = [];
+    drawAll();
+    
+    setTimeout(() => {
+      isSyncing = false;
+    }, 100);
+  }
+
+  // إرسال بداية المسار إلى Firebase
+  function sendPathStartToRoom(path) {
+    if (!firebaseEnabled || !currentRoom || isSyncing) return null;
     try {
-      // include clientId to avoid echo
-      firebase.database().ref(`rooms/${currentRoom}/paths`).push({ clientId, path });
+      const newPathRef = firebase.database().ref(`rooms/${currentRoom}/activePaths`).push();
+      newPathRef.set({
+        clientId: clientId,
+        color: path.color,
+        size: path.size,
+        points: path.points
+      });
+      return newPathRef.key;
     } catch (err) {
-      console.warn("sendLocalPathToRoom err:", err);
+      console.warn("sendPathStartToRoom err:", err);
+      return null;
+    }
+  }
+
+  // تحديث المسار بإضافة نقطة جديدة
+  function updatePathInRoom(pathId, point) {
+    if (!firebaseEnabled || !currentRoom || !pathId || isSyncing) return;
+    try {
+      const pathRef = firebase.database().ref(`rooms/${currentRoom}/activePaths/${pathId}`);
+      pathRef.transaction((currentData) => {
+        if (currentData) {
+          if (!currentData.points) currentData.points = [];
+          currentData.points.push(point);
+        }
+        return currentData;
+      });
+    } catch (err) {
+      console.warn("updatePathInRoom err:", err);
+    }
+  }
+
+  // إكمال المسار ونقله من activePaths إلى paths
+  function completePathInRoom(pathId) {
+    if (!firebaseEnabled || !currentRoom || !pathId || isSyncing) return;
+    try {
+      const activePathRef = firebase.database().ref(`rooms/${currentRoom}/activePaths/${pathId}`);
+      activePathRef.once('value', (snapshot) => {
+        const pathData = snapshot.val();
+        if (pathData) {
+          // نقل المسار إلى paths الدائمة
+          firebase.database().ref(`rooms/${currentRoom}/paths`).push({
+            clientId: clientId,
+            path: {
+              color: pathData.color,
+              size: pathData.size,
+              points: pathData.points
+            }
+          });
+          
+          // حذف المسار من activePaths
+          activePathRef.remove();
+        }
+      });
+    } catch (err) {
+      console.warn("completePathInRoom err:", err);
     }
   }
 
   function sendClearToRoom() {
-    if (!firebaseEnabled || !currentRoom) return;
+    if (!firebaseEnabled || !currentRoom || isSyncing) return;
     try {
-      firebase.database().ref(`rooms/${currentRoom}/events`).push({ clientId, type: "clear", timestamp: Date.now() });
+      firebase.database().ref(`rooms/${currentRoom}/events`).push({ 
+        clientId, 
+        type: "clear", 
+        timestamp: Date.now() 
+      });
     } catch (err) {
       console.warn("sendClearToRoom err:", err);
     }
   }
 
+  function sendJsonToRoom(data) {
+    if (!firebaseEnabled || !currentRoom || isSyncing) return;
+    try {
+      firebase.database().ref(`rooms/${currentRoom}/events`).push({ 
+        clientId, 
+        type: "loadJson", 
+        data: data,
+        timestamp: Date.now() 
+      });
+    } catch (err) {
+      console.warn("sendJsonToRoom err:", err);
+    }
+  }
+
+  function sendUndoToRoom() {
+    if (!firebaseEnabled || !currentRoom || isSyncing) return;
+    try {
+      firebase.database().ref(`rooms/${currentRoom}/history`).push({ 
+        clientId, 
+        type: "undo", 
+        timestamp: Date.now() 
+      });
+    } catch (err) {
+      console.warn("sendUndoToRoom err:", err);
+    }
+  }
+
+  function sendRedoToRoom() {
+    if (!firebaseEnabled || !currentRoom || isSyncing) return;
+    try {
+      firebase.database().ref(`rooms/${currentRoom}/history`).push({ 
+        clientId, 
+        type: "redo", 
+        timestamp: Date.now() 
+      });
+    } catch (err) {
+      console.warn("sendRedoToRoom err:", err);
+    }
+  }
+
   function attachRoomListeners(room) {
     if (!firebaseEnabled || !room) return;
-    // detach previous listeners if any (simple approach: reload refs)
-    if (pathsRef) {
-      try { pathsRef.off(); } catch(e){}
-    }
-    if (eventsRef) {
-      try { eventsRef.off(); } catch(e){}
-    }
+    // detach previous listeners if any
+    if (pathsRef) pathsRef.off();
+    if (eventsRef) eventsRef.off();
+    if (historyRef) historyRef.off();
+    if (activePathsRef) activePathsRef.off();
 
     pathsRef = firebase.database().ref(`rooms/${room}/paths`);
     eventsRef = firebase.database().ref(`rooms/${room}/events`);
+    historyRef = firebase.database().ref(`rooms/${room}/history`);
+    activePathsRef = firebase.database().ref(`rooms/${room}/activePaths`);
 
     // When a new path added
     pathsRef.on('child_added', snapshot => {
       const val = snapshot.val();
-      if (!val) return;
-      // ignore our own pushed paths
-      if (val.clientId === clientId) return;
+      if (!val || val.clientId === clientId) return;
+      
       if (val.path) {
-        // push remote path and redraw
         paths.push(val.path);
         drawAll();
       }
     });
 
-    // listen for events (clear)
+    // Listen for active paths (real-time drawing)
+    activePathsRef.on('child_added', snapshot => {
+      const val = snapshot.val();
+      if (!val || val.clientId === clientId) return;
+      
+      // نرسم المسار النشط
+      drawActivePath(val);
+    });
+
+    activePathsRef.on('child_changed', snapshot => {
+      const val = snapshot.val();
+      if (!val || val.clientId === clientId) return;
+      
+      // نرسم المسار النشط المحدث
+      drawActivePath(val);
+    });
+
+    activePathsRef.on('child_removed', snapshot => {
+      // لا نحتاج للقيام بأي شيء عند إزالة المسار النشط
+    });
+
+    // listen for events (clear, loadJson)
     eventsRef.on('child_added', snapshot => {
       const ev = snapshot.val();
-      if (!ev) return;
+      if (!ev || ev.clientId === clientId) return;
+      
       if (ev.type === "clear") {
-        // apply clear from others
         paths = [];
         undonePaths = [];
         drawAll();
+      } else if (ev.type === "loadJson") {
+        loadJsonData(ev.data);
       }
+    });
+
+    // listen for history events (undo, redo)
+    historyRef.on('child_added', snapshot => {
+      const action = snapshot.val();
+      if (!action || action.clientId === clientId) return;
+      
+      if (action.type === "undo" && paths.length > 0) {
+        undonePaths.push(paths.pop());
+        drawAll();
+      } else if (action.type === "redo" && undonePaths.length > 0) {
+        paths.push(undonePaths.pop());
+        drawAll();
+      }
+    });
+
+    // تحديث حالة الاتصال
+    firebase.database().ref('.info/connected').on('value', (snapshot) => {
+      updateConnectionStatus(snapshot.val() === true);
     });
 
     listenersAttached = true;
   }
 
+  // رسم مسار نشط (قيد الرسم)
+  function drawActivePath(pathData) {
+    if (!pathData.points || pathData.points.length < 2) return;
+    
+    ctx.strokeStyle = pathData.color;
+    ctx.lineWidth = pathData.size;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.beginPath();
+    
+    // رسم جميع النقاط في المسار
+    for (let i = 0; i < pathData.points.length - 1; i++) {
+      ctx.moveTo(pathData.points[i].x, pathData.points[i].y);
+      ctx.lineTo(pathData.points[i + 1].x, pathData.points[i + 1].y);
+    }
+    
+    ctx.stroke();
+  }
+
   newRoomBtn.addEventListener('click', () => {
-    if (!firebaseEnabled) { alert("Firebase مش شغّال أو مش معدّ. اتأكد من config."); return; }
+    if (!firebaseEnabled) { 
+      alert("Firebase مش شغّال أو مش معدّ. اتأكد من config."); 
+      return; 
+    }
     const code = Math.random().toString(36).substring(2,8).toUpperCase();
     currentRoom = code;
-    // create room root (optional)
+    // create room root
     firebase.database().ref(`rooms/${currentRoom}`).set({ created: Date.now() });
     roomCodeDisplay.textContent = currentRoom;
     // clear local and attach listeners
@@ -532,22 +814,43 @@
     undonePaths = [];
     drawAll();
     attachRoomListeners(currentRoom);
-    alert("Room created: " + currentRoom);
+    leaveRoomBtn.style.display = 'inline-block';
+    alert("تم إنشاء الغرفة: " + currentRoom);
   });
 
   joinRoomBtn.addEventListener('click', () => {
-    if (!firebaseEnabled) { alert("Firebase مش شغّال أو مش معدّ. اتأكد من config."); return; }
+    if (!firebaseEnabled) { 
+      alert("Firebase مش شغّال أو مش معدّ. اتأكد من config."); 
+      return; 
+    }
     const code = (roomCodeInput.value || "").trim().toUpperCase();
-    if (!code) return alert("اكتب كود الروم!");
+    if (!code) return alert("اكتب كود الغرفة!");
     currentRoom = code;
     roomCodeDisplay.textContent = currentRoom;
-    // clear local then attach listeners (will populate from DB)
+    // clear local then attach listeners
     paths = [];
     undonePaths = [];
     drawAll();
     attachRoomListeners(currentRoom);
-    alert("Joined room: " + currentRoom);
+    leaveRoomBtn.style.display = 'inline-block';
+    alert("انضممت إلى الغرفة: " + currentRoom);
   });
+
+  leaveRoomBtn.addEventListener('click', () => {
+    if (pathsRef) pathsRef.off();
+    if (eventsRef) eventsRef.off();
+    if (historyRef) historyRef.off();
+    if (activePathsRef) activePathsRef.off();
+    
+    currentRoom = null;
+    roomCodeDisplay.textContent = "—";
+    leaveRoomBtn.style.display = 'none';
+    updateConnectionStatus(false);
+    alert("غادرت الغرفة");
+  });
+
+  // تحديث حالة الاتصال الأولية
+  updateConnectionStatus(firebaseEnabled);
 
   // done
 </script>
