@@ -12,61 +12,145 @@
       touch-action: none;
       font-family: sans-serif;
     }
-    #menu {
+    
+    /* شريط الأدوات العلوي */
+    #topBar {
       position: fixed;
       top: 0;
       right: 0;
       left: 0;
       background: #f0f0f0;
-      padding: 10px;
+      padding: 8px;
       display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
+      justify-content: space-between;
       align-items: center;
       z-index: 10;
-      transition: all 0.3s ease;
+      height: 40px;
+      box-sizing: border-box;
+      border-bottom: 1px solid #ccc;
     }
     
-    /* التصميم الأساسي للأزرار وعناصر التحكم */
-    #menu label, #menu button {
-      font-size: 14px;
-      padding: 6px 8px;
-      border-radius: 4px;
-      border: 1px solid #ccc;
+    /* شريط الأدوات السفلي */
+    #bottomBar {
+      position: fixed;
+      bottom: 0;
+      right: 0;
+      left: 0;
+      background: #f0f0f0;
+      padding: 8px;
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      z-index: 10;
+      height: 50px;
+      box-sizing: border-box;
+      border-top: 1px solid #ccc;
+    }
+    
+    /* القائمة المنبثقة */
+    #dropdownMenu {
+      position: fixed;
+      bottom: 60px;
+      left: 10px;
       background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+      z-index: 20;
+      display: none;
+      flex-direction: column;
+      min-width: 150px;
+      overflow: hidden;
     }
     
-    #menu input[type="color"] {
+    #dropdownMenu button {
+      border: none;
+      background: none;
+      padding: 12px;
+      text-align: right;
+      font-size: 14px;
+      border-bottom: 1px solid #eee;
+    }
+    
+    #dropdownMenu button:last-child {
+      border-bottom: none;
+    }
+    
+    #dropdownMenu button:hover {
+      background: #f5f5f5;
+    }
+    
+    /* أزرار القائمة الرئيسية */
+    .menu-button {
+      background: none;
+      border: none;
+      font-size: 20px;
+      cursor: pointer;
+      padding: 5px 10px;
+    }
+    
+    /* أزرار الأدوات */
+    .tool-button {
+      background: white;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 14px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 44px;
+      height: 36px;
+    }
+    
+    /* عناصر التحكم في اللون والحجم */
+    .control-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .control-group label {
+      font-size: 14px;
+      white-space: nowrap;
+    }
+    
+    #colorPicker {
       width: 30px;
       height: 30px;
       padding: 2px;
-      vertical-align: middle;
+      border: 1px solid #ccc;
+      border-radius: 4px;
     }
     
-    #menu input[type="number"] {
+    #brushSize {
       width: 40px;
       padding: 4px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      text-align: center;
     }
     
     canvas {
       position: absolute;
-      top: 50px;
+      top: 40px;
       left: 0;
       width: 100%;
-      height: calc(100% - 50px);
+      height: calc(100% - 90px);
       background: white;
       touch-action: none;
     }
     
     .zoom-info {
       position: fixed;
-      bottom: 10px;
+      bottom: 55px;
       left: 10px;
       background: rgba(0,0,0,0.5);
       color: white;
       padding: 5px 10px;
       border-radius: 5px;
       font-size: 12px;
+      z-index: 15;
     }
     
     input[type="file"] {
@@ -75,26 +159,17 @@
     
     /* Room UI styles */
     #roomControls { 
-      display:flex; 
-      gap:8px; 
-      align-items:center; 
-      margin-right: auto;
-    }
-    
-    #roomCodeDisplay { 
-      font-weight:700; 
-      margin-left:6px; 
-      background: #4CAF50;
-      color: white;
-      padding: 4px 8px;
-      border-radius: 4px;
-      font-size: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 10px;
     }
     
     .room-status {
       display: flex;
       align-items: center;
       gap: 5px;
+      margin-bottom: 8px;
     }
     
     .status-indicator {
@@ -112,9 +187,32 @@
       background-color: #f44336;
     }
     
+    .room-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+    
+    .room-buttons button {
+      padding: 8px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      background: white;
+      cursor: pointer;
+    }
+    
+    #roomCodeInput {
+      padding: 6px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      width: 100%;
+      box-sizing: border-box;
+      margin-bottom: 8px;
+    }
+    
     .sync-notification {
       position: fixed;
-      bottom: 40px;
+      bottom: 100px;
       left: 10px;
       background: rgba(0,0,0,0.7);
       color: white;
@@ -124,98 +222,60 @@
       opacity: 0;
       transition: opacity 0.3s;
       pointer-events: none;
+      z-index: 15;
     }
     
     .sync-notification.show {
       opacity: 1;
     }
     
-    /* تصميم للهواتف المحمولة */
-    @media (max-width: 768px) {
-      #menu {
-        flex-direction: column;
-        padding: 6px;
-        height: auto;
-      }
-      
-      #topControls, #bottomControls {
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: center;
-        gap: 6px;
-        width: 100%;
-      }
-      
-      #menu label, #menu button {
-        font-size: 12px;
-        padding: 4px 6px;
-        margin: 2px;
-        flex-grow: 1;
-        text-align: center;
-      }
-      
-      #menu input[type="color"] {
-        width: 25px;
-        height: 25px;
-      }
-      
-      #menu input[type="number"] {
-        width: 35px;
-        padding: 3px;
-      }
-      
-      #roomControls {
-        flex-wrap: wrap;
-        justify-content: center;
-        margin-right: 0;
-        width: 100%;
-      }
-      
-      #roomCodeInput {
-        width: 80px !important;
-        padding: 4px !important;
-        font-size: 12px;
-      }
-      
-      canvas {
-        top: 104px; /* مساحة أكبر للعناصر العلوية */
-        height: calc(100% - 104px);
-      }
-      
-      .zoom-info {
-        bottom: 60px; /* مكانه أعلى قليلاً لتفادي التداخل مع الأزرار السفلية */
+    /* تصميم للشاشات الكبيرة - إخفاء القائمة المنبثقة */
+    @media (min-width: 769px) {
+      #dropdownMenu {
+        display: none !important;
       }
     }
   </style>
 </head>
 <body>
 
-<div id="menu">
-  <div id="topControls">
-    <label>🎨 اللون: <input type="color" id="colorPicker" value="#000000"></label>
-    <label>🖌️ الحجم: <input type="number" id="brushSize" min="1" max="100" value="3" step="1"></label>
-    <button id="undoBtn">↩️ تراجع</button>
-    <button id="redoBtn">↪️ إعادة</button>
-    <button id="clearBtn">🧹 مسح</button>
+<!-- الشريط العلوي -->
+<div id="topBar">
+  <div class="control-group">
+    <label for="colorPicker">🎨</label>
+    <input type="color" id="colorPicker" value="#000000">
   </div>
   
-  <div id="bottomControls">
-    <button id="saveBtn">💾 حفظ صورة</button>
-    <button id="saveJsonBtn">📁 حفظ JSON</button>
-    <button id="loadJsonBtn">📂 فتح JSON</button>
-    <input type="file" id="jsonFileInput" accept=".json">
+  <div class="control-group">
+    <label for="brushSize">الحجم:</label>
+    <input type="number" id="brushSize" min="1" max="100" value="3" step="1">
+  </div>
+  
+  <button id="menuToggle" class="menu-button">⋯</button>
+</div>
 
-    <!-- Room controls -->
-    <div id="roomControls">
-      <div class="room-status">
-        <span class="status-indicator" id="connectionStatus"></span>
-        <span>الغرفة:</span>
-        <span id="roomCodeDisplay">—</span>
-      </div>
-      <button id="newRoomBtn">➕ جديد</button>
-      <input type="text" id="roomCodeInput" placeholder="كود الغرفة" style="padding:6px;border-radius:6px;width: 100px;">
-      <button id="joinRoomBtn">🔗 انضم</button>
-      <button id="leaveRoomBtn" style="display:none;">👋 غادر</button>
+<!-- الشريط السفلي -->
+<div id="bottomBar">
+  <button id="undoBtn" class="tool-button">↩️</button>
+  <button id="redoBtn" class="tool-button">↪️</button>
+  <button id="clearBtn" class="tool-button">🧹</button>
+  <button id="saveBtn" class="tool-button">💾</button>
+</div>
+
+<!-- القائمة المنبثقة -->
+<div id="dropdownMenu">
+  <button id="saveJsonBtn">💾 حفظ JSON</button>
+  <button id="loadJsonBtn">📂 فتح JSON</button>
+  <div id="roomControls">
+    <div class="room-status">
+      <span class="status-indicator" id="connectionStatus"></span>
+      <span>الحالة:</span>
+    </div>
+    <input type="text" id="roomCodeInput" placeholder="كود الغرفة">
+    <div class="room-buttons">
+      <button id="newRoomBtn">➕ غرفة جديدة</button>
+      <button id="joinRoomBtn">🔗 انضم إلى غرفة</button>
+      <button id="leaveRoomBtn" style="display:none;">👋 غادر الغرفة</button>
     </div>
   </div>
 </div>
@@ -223,6 +283,8 @@
 <canvas id="canvas"></canvas>
 <div class="zoom-info" id="zoomInfo">زوم: 1x</div>
 <div class="sync-notification" id="syncNotification">يتم المزامنة...</div>
+
+<input type="file" id="jsonFileInput" accept=".json">
 
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
@@ -274,10 +336,12 @@
   const zoomInfo = document.getElementById("zoomInfo");
   const connectionStatus = document.getElementById("connectionStatus");
   const syncNotification = document.getElementById("syncNotification");
+  const menuToggle = document.getElementById("menuToggle");
+  const dropdownMenu = document.getElementById("dropdownMenu");
 
   // Initialize canvas
   let width = window.innerWidth;
-  let height = window.innerHeight - 50;
+  let height = window.innerHeight - 90; // 40px للشريط العلوي + 50px للشريط السفلي
   canvas.width = width;
   canvas.height = height;
 
@@ -304,6 +368,9 @@
   // Sync state
   let isSyncing = false;
   let currentPathId = null; // لتتبع المسار الحالي في Firebase
+
+  // Menu state
+  let menuOpen = false;
 
   function showSyncNotification(message, duration = 2000) {
     syncNotification.textContent = message;
@@ -631,9 +698,24 @@
     }
   });
 
+  // Toggle menu
+  menuToggle.addEventListener("click", (e) => {
+    e.stopPropagation();
+    menuOpen = !menuOpen;
+    dropdownMenu.style.display = menuOpen ? "flex" : "none";
+  });
+
+  // Close menu when clicking outside
+  document.addEventListener("click", (e) => {
+    if (menuOpen && !dropdownMenu.contains(e.target) && e.target !== menuToggle) {
+      menuOpen = false;
+      dropdownMenu.style.display = "none";
+    }
+  });
+
   window.addEventListener("resize", () => {
     width = window.innerWidth;
-    height = window.innerHeight - (window.innerWidth <= 768 ? 104 : 50);
+    height = window.innerHeight - 90;
     canvas.width = width;
     canvas.height = height;
     drawAll();
@@ -649,7 +731,6 @@
   const joinRoomBtn = document.getElementById("joinRoomBtn");
   const leaveRoomBtn = document.getElementById("leaveRoomBtn");
   const roomCodeInput = document.getElementById("roomCodeInput");
-  const roomCodeDisplay = document.getElementById("roomCodeDisplay");
 
   let currentRoom = null;
   let pathsRef = null;
@@ -904,14 +985,15 @@
     currentRoom = code;
     // create room root
     firebase.database().ref(`rooms/${currentRoom}`).set({ created: Date.now() });
-    roomCodeDisplay.textContent = currentRoom;
     // clear local and attach listeners
     paths = [];
     undonePaths = [];
     drawAll();
     attachRoomListeners(currentRoom);
-    leaveRoomBtn.style.display = 'inline-block';
+    leaveRoomBtn.style.display = 'block';
     alert("تم إنشاء الغرفة: " + currentRoom);
+    menuOpen = false;
+    dropdownMenu.style.display = "none";
   });
 
   joinRoomBtn.addEventListener('click', () => {
@@ -922,14 +1004,15 @@
     const code = (roomCodeInput.value || "").trim().toUpperCase();
     if (!code) return alert("اكتب كود الغرفة!");
     currentRoom = code;
-    roomCodeDisplay.textContent = currentRoom;
     // clear local then attach listeners
     paths = [];
     undonePaths = [];
     drawAll();
     attachRoomListeners(currentRoom);
-    leaveRoomBtn.style.display = 'inline-block';
+    leaveRoomBtn.style.display = 'block';
     alert("انضممت إلى الغرفة: " + currentRoom);
+    menuOpen = false;
+    dropdownMenu.style.display = "none";
   });
 
   leaveRoomBtn.addEventListener('click', () => {
@@ -939,10 +1022,11 @@
     if (activePathsRef) activePathsRef.off();
     
     currentRoom = null;
-    roomCodeDisplay.textContent = "—";
     leaveRoomBtn.style.display = 'none';
     updateConnectionStatus(false);
     alert("غادرت الغرفة");
+    menuOpen = false;
+    dropdownMenu.style.display = "none";
   });
 
   // تحديث حالة الاتصال الأولية
