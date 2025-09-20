@@ -1,229 +1,204 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Luix's Endless Drawing</title>
+  <meta charset="UTF-8">
+  <title>Mini Animation Studio</title>
   <style>
-    body, html {
+    body {
       margin: 0;
-      padding: 0;
-      height: 100%;
-      overflow: hidden;
       font-family: Arial, sans-serif;
-      background: #111;
-      color: white;
-    }
-    #menu {
-      position: absolute;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
+      background: #1e1e1e;
+      color: #f1f1f1;
       display: flex;
       flex-direction: column;
+      height: 100vh;
+    }
+
+    header {
+      background: #252526;
+      padding: 10px;
+      text-align: center;
+      font-size: 20px;
+      font-weight: bold;
+      border-bottom: 2px solid #444;
+    }
+
+    #toolbar {
+      background: #2d2d30;
+      display: flex;
+      padding: 8px;
+      gap: 10px;
+      border-bottom: 2px solid #444;
+    }
+
+    button, input, select {
+      background: #3a3a3d;
+      color: #f1f1f1;
+      border: none;
+      padding: 6px 10px;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #505053;
+    }
+
+    #canvasContainer {
+      flex: 1;
+      display: flex;
       justify-content: center;
       align-items: center;
-      background: #111;
-      z-index: 10;
+      background: #1e1e1e;
     }
-    #menu h1 {
-      font-size: 2.5em;
-      margin-bottom: 30px;
-      color: #0ff;
-      text-shadow: 0 0 10px #0ff;
-    }
-    .menu-btn {
-      padding: 15px 30px;
-      margin: 10px;
-      font-size: 1.2em;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      background: #0ff;
-      color: #111;
-      transition: 0.3s;
-    }
-    .menu-btn:hover {
-      background: #09c;
-    }
-    #toolbar {
-      position: absolute;
-      top: 10px; left: 10px;
-      display: flex;
-      gap: 5px;
-      z-index: 5;
-    }
-    #toolbar button, #toolbar input {
-      padding: 5px 10px;
-      font-size: 14px;
-    }
+
     canvas {
-      background: white;
-      display: block;
+      background: #fff;
+      border: 2px solid #444;
+      border-radius: 10px;
+    }
+
+    footer {
+      background: #252526;
+      text-align: center;
+      padding: 6px;
+      font-size: 12px;
+      border-top: 2px solid #444;
     }
   </style>
 </head>
 <body>
-  <!-- Main Menu -->
-  <div id="menu">
-    <h1>Luix's Endless Drawing</h1>
-    <button class="menu-btn" id="soloBtn">Solo</button>
-    <button class="menu-btn" id="teamBtn">Team</button>
-  </div>
+  <header>🎨 Mini Animation Studio</header>
 
-  <!-- Toolbar -->
-  <div id="toolbar" style="display:none;">
+  <div id="toolbar">
+    <button onclick="setTool('brush')">🖌 Brush</button>
+    <button onclick="setTool('line')">📏 Line</button>
+    <button onclick="setTool('circle')">⚪ Circle</button>
+    <button onclick="setTool('rect')">⬛ Rect</button>
+    <button onclick="setTool('eraser')">🧽 Eraser</button>
     <input type="color" id="colorPicker" value="#000000">
-    <input type="number" id="sizeInput" value="5" min="1" max="100">
-    <button id="undoBtn">Undo</button>
-    <button id="redoBtn">Redo</button>
-    <button id="eraseBtn">Eraser</button>
+    <input type="number" id="sizePicker" value="5" min="1" max="100">
+    <button onclick="undo()">↩ Undo</button>
+    <button onclick="redo()">↪ Redo</button>
+    <button onclick="saveProject()">💾 Save</button>
+    <button onclick="loadProject()">📂 Load</button>
+    <button onclick="exportPNG()">🖼 Export PNG</button>
   </div>
 
-  <!-- Canvas -->
-  <canvas id="canvas"></canvas>
+  <div id="canvasContainer">
+    <canvas id="drawingCanvas" width="800" height="500"></canvas>
+  </div>
 
-  <!-- Firebase -->
-  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js"></script>
+  <footer>© 2025 Mini Animation Studio</footer>
 
   <script>
-    // Firebase config (حط بياناتك هنا)
-    const firebaseConfig = {
-      apiKey: "AIzaSyC6PieefR4_qJwC6NXdJNN16GNyBu7UQOw",
-      authDomain: "endless-drawing.firebaseapp.com",
-      databaseURL: "https://endless-drawing-default-rtdb.firebaseio.com",
-      projectId: "endless-drawing",
-      storageBucket: "endless-drawing.firebasestorage.app",
-      messagingSenderId: "193053808478",
-      appId: "1:193053808478:web:fd0c700ca0a94f584fe1cf",
-      measurementId: "G-8L79M10CBR"
-    };
-
-    const app = firebase.initializeApp(firebaseConfig);
-    const db = firebase.database();
-
-    const canvas = document.getElementById("canvas");
+    const canvas = document.getElementById("drawingCanvas");
     const ctx = canvas.getContext("2d");
-    const toolbar = document.getElementById("toolbar");
-    const menu = document.getElementById("menu");
-
     let drawing = false;
-    let color = "#000000";
-    let size = 5;
-    let erasing = false;
-    let soloMode = true;
-
-    let undoStack = [];
+    let tool = "brush";
+    let color = document.getElementById("colorPicker").value;
+    let size = parseInt(document.getElementById("sizePicker").value);
+    let startX, startY;
+    let history = [];
     let redoStack = [];
 
-    function resizeCanvas() {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-    }
-    window.addEventListener("resize", resizeCanvas);
-    resizeCanvas();
+    function setTool(t) { tool = t; }
+    document.getElementById("colorPicker").oninput = e => color = e.target.value;
+    document.getElementById("sizePicker").oninput = e => size = parseInt(e.target.value);
 
     function saveState() {
-      undoStack.push(canvas.toDataURL());
-      if (undoStack.length > 50) undoStack.shift();
+      history.push(canvas.toDataURL());
       redoStack = [];
     }
 
-    function restoreState(stackFrom, stackTo) {
-      if (stackFrom.length > 0) {
-        stackTo.push(canvas.toDataURL());
-        let state = stackFrom.pop();
+    function undo() {
+      if (history.length > 0) {
+        redoStack.push(canvas.toDataURL());
+        let last = history.pop();
         let img = new Image();
-        img.src = state;
-        img.onload = () => {
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-          ctx.drawImage(img, 0, 0);
-        };
+        img.src = last;
+        img.onload = () => ctx.drawImage(img, 0, 0);
       }
     }
 
-    document.getElementById("undoBtn").onclick = () => {
-      restoreState(undoStack, redoStack);
-      if (!soloMode) db.ref("undo").push(Date.now());
-    };
-    document.getElementById("redoBtn").onclick = () => {
-      restoreState(redoStack, undoStack);
-      if (!soloMode) db.ref("redo").push(Date.now());
-    };
-    document.getElementById("eraseBtn").onclick = () => erasing = !erasing;
+    function redo() {
+      if (redoStack.length > 0) {
+        history.push(canvas.toDataURL());
+        let next = redoStack.pop();
+        let img = new Image();
+        img.src = next;
+        img.onload = () => ctx.drawImage(img, 0, 0);
+      }
+    }
 
-    document.getElementById("colorPicker").oninput = e => color = e.target.value;
-    document.getElementById("sizeInput").oninput = e => size = e.target.value;
-
-    function startDraw(x, y) {
+    canvas.addEventListener("mousedown", e => {
       drawing = true;
-      ctx.beginPath();
-      ctx.moveTo(x, y);
+      startX = e.offsetX;
+      startY = e.offsetY;
       saveState();
-    }
-    function draw(x, y) {
-      if (!drawing) return;
-      ctx.lineTo(x, y);
-      ctx.strokeStyle = erasing ? "white" : color;
-      ctx.lineWidth = size;
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
-      ctx.stroke();
+    });
 
-      if (!soloMode) {
-        db.ref("draw").push({
-          x, y, color: ctx.strokeStyle, size: size
-        });
+    canvas.addEventListener("mouseup", e => {
+      drawing = false;
+      if (tool !== "brush" && tool !== "eraser") drawShape(e.offsetX, e.offsetY);
+    });
+
+    canvas.addEventListener("mousemove", e => {
+      if (!drawing) return;
+      if (tool === "brush") {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = size;
+        ctx.lineCap = "round";
+        ctx.lineTo(e.offsetX, e.offsetY);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(e.offsetX, e.offsetY);
+      } else if (tool === "eraser") {
+        ctx.clearRect(e.offsetX - size/2, e.offsetY - size/2, size, size);
+      }
+    });
+
+    function drawShape(x, y) {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = size;
+      if (tool === "line") {
+        ctx.beginPath();
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(x, y);
+        ctx.stroke();
+      } else if (tool === "circle") {
+        let r = Math.sqrt((x - startX)**2 + (y - startY)**2);
+        ctx.beginPath();
+        ctx.arc(startX, startY, r, 0, Math.PI * 2);
+        ctx.stroke();
+      } else if (tool === "rect") {
+        ctx.strokeRect(startX, startY, x - startX, y - startY);
       }
     }
-    function stopDraw() {
-      drawing = false;
+
+    function saveProject() {
+      let data = canvas.toDataURL();
+      localStorage.setItem("drawingProject", data);
+      alert("Project saved!");
     }
 
-    canvas.addEventListener("mousedown", e => startDraw(e.offsetX, e.offsetY));
-    canvas.addEventListener("mousemove", e => draw(e.offsetX, e.offsetY));
-    canvas.addEventListener("mouseup", stopDraw);
+    function loadProject() {
+      let data = localStorage.getItem("drawingProject");
+      if (data) {
+        let img = new Image();
+        img.src = data;
+        img.onload = () => ctx.drawImage(img, 0, 0);
+      } else {
+        alert("No project found.");
+      }
+    }
 
-    canvas.addEventListener("touchstart", e => {
-      let t = e.touches[0];
-      startDraw(t.clientX, t.clientY);
-    });
-    canvas.addEventListener("touchmove", e => {
-      let t = e.touches[0];
-      draw(t.clientX, t.clientY);
-    });
-    canvas.addEventListener("touchend", stopDraw);
-
-    // Listen Firebase (team mode)
-    db.ref("draw").on("child_added", snap => {
-      if (soloMode) return;
-      let d = snap.val();
-      ctx.strokeStyle = d.color;
-      ctx.lineWidth = d.size;
-      ctx.beginPath();
-      ctx.lineTo(d.x, d.y);
-      ctx.stroke();
-    });
-
-    db.ref("undo").on("child_added", snap => {
-      if (soloMode) return;
-      restoreState(undoStack, redoStack);
-    });
-    db.ref("redo").on("child_added", snap => {
-      if (soloMode) return;
-      restoreState(redoStack, undoStack);
-    });
-
-    // Menu logic
-    document.getElementById("soloBtn").onclick = () => {
-      soloMode = true;
-      menu.style.display = "none";
-      toolbar.style.display = "flex";
-    };
-    document.getElementById("teamBtn").onclick = () => {
-      soloMode = false;
-      menu.style.display = "none";
-      toolbar.style.display = "flex";
-    };
+    function exportPNG() {
+      let link = document.createElement("a");
+      link.download = "drawing.png";
+      link.href = canvas.toDataURL();
+      link.click();
+    }
   </script>
 </body>
 </html>
