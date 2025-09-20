@@ -24,7 +24,30 @@
       gap: 10px;
       align-items: center;
       z-index: 10;
+      transition: all 0.3s ease;
     }
+    
+    /* التصميم الأساسي للأزرار وعناصر التحكم */
+    #menu label, #menu button {
+      font-size: 14px;
+      padding: 6px 8px;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+      background: white;
+    }
+    
+    #menu input[type="color"] {
+      width: 30px;
+      height: 30px;
+      padding: 2px;
+      vertical-align: middle;
+    }
+    
+    #menu input[type="number"] {
+      width: 40px;
+      padding: 4px;
+    }
+    
     canvas {
       position: absolute;
       top: 50px;
@@ -34,6 +57,7 @@
       background: white;
       touch-action: none;
     }
+    
     .zoom-info {
       position: fixed;
       bottom: 10px;
@@ -44,9 +68,11 @@
       border-radius: 5px;
       font-size: 12px;
     }
+    
     input[type="file"] {
       display: none;
     }
+    
     /* Room UI styles */
     #roomControls { 
       display:flex; 
@@ -54,6 +80,7 @@
       align-items:center; 
       margin-right: auto;
     }
+    
     #roomCodeDisplay { 
       font-weight:700; 
       margin-left:6px; 
@@ -61,24 +88,30 @@
       color: white;
       padding: 4px 8px;
       border-radius: 4px;
+      font-size: 12px;
     }
+    
     .room-status {
       display: flex;
       align-items: center;
       gap: 5px;
     }
+    
     .status-indicator {
       width: 10px;
       height: 10px;
       border-radius: 50%;
       display: inline-block;
     }
+    
     .status-connected {
       background-color: #4CAF50;
     }
+    
     .status-disconnected {
       background-color: #f44336;
     }
+    
     .sync-notification {
       position: fixed;
       bottom: 40px;
@@ -92,35 +125,98 @@
       transition: opacity 0.3s;
       pointer-events: none;
     }
+    
     .sync-notification.show {
       opacity: 1;
+    }
+    
+    /* تصميم للهواتف المحمولة */
+    @media (max-width: 768px) {
+      #menu {
+        flex-direction: column;
+        padding: 6px;
+        height: auto;
+      }
+      
+      #topControls, #bottomControls {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 6px;
+        width: 100%;
+      }
+      
+      #menu label, #menu button {
+        font-size: 12px;
+        padding: 4px 6px;
+        margin: 2px;
+        flex-grow: 1;
+        text-align: center;
+      }
+      
+      #menu input[type="color"] {
+        width: 25px;
+        height: 25px;
+      }
+      
+      #menu input[type="number"] {
+        width: 35px;
+        padding: 3px;
+      }
+      
+      #roomControls {
+        flex-wrap: wrap;
+        justify-content: center;
+        margin-right: 0;
+        width: 100%;
+      }
+      
+      #roomCodeInput {
+        width: 80px !important;
+        padding: 4px !important;
+        font-size: 12px;
+      }
+      
+      canvas {
+        top: 104px; /* مساحة أكبر للعناصر العلوية */
+        height: calc(100% - 104px);
+      }
+      
+      .zoom-info {
+        bottom: 60px; /* مكانه أعلى قليلاً لتفادي التداخل مع الأزرار السفلية */
+      }
     }
   </style>
 </head>
 <body>
 
 <div id="menu">
-  <label>🎨 اللون: <input type="color" id="colorPicker" value="#000000"></label>
-  <label>🖌️ الحجم: <input type="number" id="brushSize" min="1" max="100" value="3" step="1"></label>
-  <button id="undoBtn">↩️ تراجع</button>
-  <button id="redoBtn">↪️ إعادة</button>
-  <button id="clearBtn">🧹 مسح</button>
-  <button id="saveBtn">💾 حفظ صورة</button>
-  <button id="saveJsonBtn">📁 حفظ JSON</button>
-  <button id="loadJsonBtn">📂 فتح JSON</button>
-  <input type="file" id="jsonFileInput" accept=".json">
+  <div id="topControls">
+    <label>🎨 اللون: <input type="color" id="colorPicker" value="#000000"></label>
+    <label>🖌️ الحجم: <input type="number" id="brushSize" min="1" max="100" value="3" step="1"></label>
+    <button id="undoBtn">↩️ تراجع</button>
+    <button id="redoBtn">↪️ إعادة</button>
+    <button id="clearBtn">🧹 مسح</button>
+  </div>
+  
+  <div id="bottomControls">
+    <button id="saveBtn">💾 حفظ صورة</button>
+    <button id="saveJsonBtn">📁 حفظ JSON</button>
+    <button id="loadJsonBtn">📂 فتح JSON</button>
+    <input type="file" id="jsonFileInput" accept=".json">
 
-  <!-- Room controls -->
-  <div id="roomControls">
-    <div class="room-status">
-      <span class="status-indicator" id="connectionStatus"></span>
-      <span>الغرفة:</span>
-      <span id="roomCodeDisplay">—</span>
+    <!-- Room controls -->
+    <div id="roomControls">
+      <div class="room-status">
+        <span class="status-indicator" id="connectionStatus"></span>
+        <span>الغرفة:</span>
+        <span id="roomCodeDisplay">—</span>
+      </div>
+      <button id="newRoomBtn">➕ جديد</button>
+      <input type="text" id="roomCodeInput" placeholder="كود الغرفة" style="padding:6px;border-radius:6px;width: 100px;">
+      <button id="joinRoomBtn">🔗 انضم</button>
+      <button id="leaveRoomBtn" style="display:none;">👋 غادر</button>
     </div>
-    <button id="newRoomBtn">➕ جديد</button>
-    <input type="text" id="roomCodeInput" placeholder="كود الغرفة" style="padding:6px;border-radius:6px;width: 100px;">
-    <button id="joinRoomBtn">🔗 انضم</button>
-    <button id="leaveRoomBtn" style="display:none;">👋 غادر</button>
   </div>
 </div>
 
@@ -537,7 +633,7 @@
 
   window.addEventListener("resize", () => {
     width = window.innerWidth;
-    height = window.innerHeight - 50;
+    height = window.innerHeight - (window.innerWidth <= 768 ? 104 : 50);
     canvas.width = width;
     canvas.height = height;
     drawAll();
