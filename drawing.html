@@ -229,6 +229,18 @@
       opacity: 1;
     }
     
+    .performance-info {
+      position: fixed;
+      bottom: 55px;
+      right: 10px;
+      background: rgba(0,0,0,0.5);
+      color: white;
+      padding: 5px 10px;
+      border-radius: 5px;
+      font-size: 10px;
+      z-index: 15;
+    }
+    
     /* تصميم للشاشات الكبيرة - إخفاء القائمة المنبثقة */
     @media (min-width: 769px) {
       #dropdownMenu {
@@ -283,6 +295,7 @@
 <canvas id="canvas"></canvas>
 <div class="zoom-info" id="zoomInfo">زوم: 1x</div>
 <div class="sync-notification" id="syncNotification">يتم المزامنة...</div>
+<div class="performance-info" id="performanceInfo">Ping: --ms</div>
 
 <input type="file" id="jsonFileInput" accept=".json">
 
@@ -338,6 +351,7 @@
   const syncNotification = document.getElementById("syncNotification");
   const menuToggle = document.getElementById("menuToggle");
   const dropdownMenu = document.getElementById("dropdownMenu");
+  const performanceInfo = document.getElementById("performanceInfo");
 
   // Initialize canvas
   let width = window.innerWidth;
@@ -345,8 +359,9 @@
   canvas.width = width;
   canvas.height = height;
 
-  // Drawing state
-  let paths = [];
+  // Drawing state - كل جهاز يحتفظ برسمه الخاص
+  let localPaths = []; // المسارات المحلية فقط
+  let allPaths = []; // جميع المسارات (المحلية + الأخرى)
   let undonePaths = [];
   let currentPath = null;
   let drawing = false;
@@ -354,7 +369,7 @@
   let lastX = 0;
   let lastY = 0;
 
-  // Zoom state
+  // Zoom state - كل جهاز له نظام زوم مستقل
   let zoom = 1;
   let panX = 0;
   let panY = 0;
@@ -362,17 +377,19 @@
   let lastTouchDist = 0;
   let zoomEndTime = 0;
   const ZOOM_COOLDOWN = 200;
-  const MIN_ZOOM = 1e-25;
-  const MAX_ZOOM = 1e25;
+  const MIN_ZOOM = 0.1;
+  const MAX_ZOOM = 20;
 
   // Sync state
   let isSyncing = false;
-  let currentPathId = null; // لتتبع المسار الحالي في Firebase
+  let currentPathId = null;
+  let lastPingTime = 0;
+  let pingInterval;
 
   // Menu state
   let menuOpen = false;
 
-  function showSyncNotification(message, duration = 2000) {
+  function showSyncNotification(message, duration = 1000) {
     syncNotification.textContent = message;
     syncNotification.classList.add('show');
     setTimeout(() => {
@@ -388,12 +405,17 @@
     }
   }
 
+  function updatePerformanceInfo(ping) {
+    performanceInfo.textContent = `Ping: ${ping}ms | Paths: ${allPaths.length}`;
+  }
+
   function drawAll() {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.setTransform(zoom, 0, 0, zoom, panX, panY);
 
-    for (let path of paths) {
+    // رسم جميع المسارات (المحلية والأخرى)
+    for (let path of allPaths) {
       ctx.strokeStyle = path.color;
       ctx.lineWidth = path.size;
       ctx.lineCap = "round";
@@ -444,14 +466,15 @@
       currentPath = {
         color: colorPicker.value,
         size: parseFloat(brushSize.value),
-        points: [{x: lastX, y: lastY}]
+        points: [{x: lastX, y: lastY}],
+        clientId: clientId // إضافة معرف العميل للمسار
       };
       drawing = true;
       hasMoved = false;
       
-      // إنشاء مسار جديد في Firebase فوراً
+      // إرسال بداية المسار فوراً
       if (firebaseEnabled && currentRoom) {
-        currentPathId = sendPathStartToRoom(currentPath);
+        sendPathPointToRoom(currentPath, pos, 'start');
       }
     }
   });
@@ -486,6 +509,7 @@
         }
         currentPath.points.push(pos);
         
+        // الرسم المحلي فوري
         ctx.strokeStyle = currentPath.color;
         ctx.lineWidth = currentPath.size;
         ctx.lineCap = "round";
@@ -497,9 +521,9 @@
         lastX = pos.x;
         lastY = pos.y;
         
-        // إرسال النقطة الجديدة إلى Firebase فوراً
-        if (firebaseEnabled && currentRoom && currentPathId) {
-          updatePathInRoom(currentPathId, pos);
+        // إرسال النقطة فوراً مع تحسين الأداء
+        if (firebaseEnabled && currentRoom) {
+          sendPathPointToRoom(currentPath, pos, 'move');
         }
       }
     }
@@ -512,18 +536,21 @@
     }
     
     if (drawing && hasMoved && currentPath.points.length > 1) {
-      paths.push(currentPath);
+      // إضافة المسار للمسارات المحلية والكلية
+      localPaths.push(currentPath);
+      allPaths.push(currentPath);
       undonePaths = [];
       
-      // إكمال المسار في Firebase
-      if (firebaseEnabled && currentRoom && currentPathId) {
-        completePathInRoom(currentPathId);
+      // إرسال نهاية المسار
+      if (firebaseEnabled && currentRoom) {
+        sendPathPointToRoom(currentPath, null, 'end');
       }
+      
+      showSyncNotification("✓ تم حفظ المسار", 800);
     }
     drawing = false;
     currentPath = null;
     hasMoved = false;
-    currentPathId = null;
   });
 
   // Mouse events (for desktop)
@@ -535,14 +562,15 @@
       currentPath = {
         color: colorPicker.value,
         size: parseFloat(brushSize.value),
-        points: [{x: lastX, y: lastY}]
+        points: [{x: lastX, y: lastY}],
+        clientId: clientId
       };
       drawing = true;
       hasMoved = false;
       
-      // إنشاء مسار جديد في Firebase فوراً
+      // إرسال بداية المسار فوراً
       if (firebaseEnabled && currentRoom) {
-        currentPathId = sendPathStartToRoom(currentPath);
+        sendPathPointToRoom(currentPath, pos, 'start');
       }
     }
   });
@@ -561,6 +589,7 @@
         }
         currentPath.points.push(pos);
         
+        // الرسم المحلي فوري
         ctx.strokeStyle = currentPath.color;
         ctx.lineWidth = currentPath.size;
         ctx.lineCap = "round";
@@ -572,9 +601,9 @@
         lastX = pos.x;
         lastY = pos.y;
         
-        // إرسال النقطة الجديدة إلى Firebase فوراً
-        if (firebaseEnabled && currentRoom && currentPathId) {
-          updatePathInRoom(currentPathId, pos);
+        // إرسال النقطة فوراً
+        if (firebaseEnabled && currentRoom) {
+          sendPathPointToRoom(currentPath, pos, 'move');
         }
       }
     }
@@ -582,45 +611,48 @@
 
   canvas.addEventListener("mouseup", () => {
     if (drawing && hasMoved && currentPath.points.length > 1) {
-      paths.push(currentPath);
+      localPaths.push(currentPath);
+      allPaths.push(currentPath);
       undonePaths = [];
       
-      // إكمال المسار في Firebase
-      if (firebaseEnabled && currentRoom && currentPathId) {
-        completePathInRoom(currentPathId);
+      // إرسال نهاية المسار
+      if (firebaseEnabled && currentRoom) {
+        sendPathPointToRoom(currentPath, null, 'end');
       }
+      
+      showSyncNotification("✓ تم حفظ المسار", 800);
     }
     drawing = false;
     currentPath = null;
     hasMoved = false;
-    currentPathId = null;
   });
 
   canvas.addEventListener("mouseleave", () => {
     if (drawing && hasMoved && currentPath.points.length > 1) {
-      paths.push(currentPath);
+      localPaths.push(currentPath);
+      allPaths.push(currentPath);
       undonePaths = [];
       
-      // إكمال المسار في Firebase
-      if (firebaseEnabled && currentRoom && currentPathId) {
-        completePathInRoom(currentPathId);
+      // إرسال نهاية المسار
+      if (firebaseEnabled && currentRoom) {
+        sendPathPointToRoom(currentPath, null, 'end');
       }
     }
     drawing = false;
     currentPath = null;
     hasMoved = false;
-    currentPathId = null;
   });
 
   // Button handlers
   clearBtn.addEventListener("click", () => {
-    paths = [];
+    localPaths = [];
+    allPaths = [];
     undonePaths = [];
     zoom = 1;
     panX = 0;
     panY = 0;
     drawAll();
-    // notify room
+    // إرسال أمر المسح للجميع
     sendClearToRoom();
   });
 
@@ -633,7 +665,7 @@
 
   saveJsonBtn.addEventListener("click", () => {
     const data = {
-      paths: paths,
+      paths: allPaths,
       zoom: zoom,
       panX: panX,
       panY: panY
@@ -664,7 +696,7 @@
         const data = JSON.parse(event.target.result);
         loadJsonData(data);
         
-        // Send to room if connected
+        // إرسال البيانات للغرفة
         if (firebaseEnabled && currentRoom) {
           sendJsonToRoom(data);
         }
@@ -677,24 +709,30 @@
   });
 
   undoBtn.addEventListener("click", () => {
-    if (paths.length > 0) {
-      const undonePath = paths.pop();
+    if (localPaths.length > 0) {
+      const undonePath = localPaths.pop();
+      // إزالة المسار من allPaths أيضاً
+      const index = allPaths.indexOf(undonePath);
+      if (index > -1) {
+        allPaths.splice(index, 1);
+      }
       undonePaths.push(undonePath);
       drawAll();
       
-      // Send undo action to room
-      sendUndoToRoom();
+      // إرسال أمر التراجع
+      sendUndoToRoom(undonePath);
     }
   });
 
   redoBtn.addEventListener("click", () => {
     if (undonePaths.length > 0) {
       const redonePath = undonePaths.pop();
-      paths.push(redonePath);
+      localPaths.push(redonePath);
+      allPaths.push(redonePath);
       drawAll();
       
-      // Send redo action to room
-      sendRedoToRoom();
+      // إرسال أمر الإعادة
+      sendRedoToRoom(redonePath);
     }
   });
 
@@ -725,7 +763,7 @@
   drawAll();
 
   /***********************
-   * Team/Firebase sync functions
+   * نظام المزامنة المحسّن بدون تداخل زوم
    ***********************/
   const newRoomBtn = document.getElementById("newRoomBtn");
   const joinRoomBtn = document.getElementById("joinRoomBtn");
@@ -736,7 +774,6 @@
   let pathsRef = null;
   let eventsRef = null;
   let historyRef = null;
-  let activePathsRef = null;
   let listenersAttached = false;
 
   function updateConnectionStatus(connected) {
@@ -749,7 +786,8 @@
 
   function loadJsonData(data) {
     isSyncing = true;
-    paths = data.paths || [];
+    allPaths = data.paths || [];
+    localPaths = allPaths.filter(path => path.clientId === clientId);
     zoom = data.zoom || 1;
     panX = data.panX || 0;
     panY = data.panY || 0;
@@ -761,65 +799,25 @@
     }, 100);
   }
 
-  // إرسال بداية المسار إلى Firebase
-  function sendPathStartToRoom(path) {
-    if (!firebaseEnabled || !currentRoom || isSyncing) return null;
+  // إرسال نقطة مسار مع التحسين
+  function sendPathPointToRoom(path, point, action) {
+    if (!firebaseEnabled || !currentRoom || isSyncing) return;
+    
     try {
-      const newPathRef = firebase.database().ref(`rooms/${currentRoom}/activePaths`).push();
-      newPathRef.set({
+      const data = {
         clientId: clientId,
+        pathId: path.clientId + Date.now(), // معرف فريد للمسار
         color: path.color,
         size: path.size,
-        points: path.points
-      });
-      return newPathRef.key;
+        point: point,
+        action: action,
+        timestamp: Date.now()
+      };
+      
+      // إرسال البيانات فوراً بدون تأخير
+      firebase.database().ref(`rooms/${currentRoom}/drawing`).push(data);
     } catch (err) {
-      console.warn("sendPathStartToRoom err:", err);
-      return null;
-    }
-  }
-
-  // تحديث المسار بإضافة نقطة جديدة
-  function updatePathInRoom(pathId, point) {
-    if (!firebaseEnabled || !currentRoom || !pathId || isSyncing) return;
-    try {
-      const pathRef = firebase.database().ref(`rooms/${currentRoom}/activePaths/${pathId}`);
-      pathRef.transaction((currentData) => {
-        if (currentData) {
-          if (!currentData.points) currentData.points = [];
-          currentData.points.push(point);
-        }
-        return currentData;
-      });
-    } catch (err) {
-      console.warn("updatePathInRoom err:", err);
-    }
-  }
-
-  // إكمال المسار ونقله من activePaths إلى paths
-  function completePathInRoom(pathId) {
-    if (!firebaseEnabled || !currentRoom || !pathId || isSyncing) return;
-    try {
-      const activePathRef = firebase.database().ref(`rooms/${currentRoom}/activePaths/${pathId}`);
-      activePathRef.once('value', (snapshot) => {
-        const pathData = snapshot.val();
-        if (pathData) {
-          // نقل المسار إلى paths الدائمة
-          firebase.database().ref(`rooms/${currentRoom}/paths`).push({
-            clientId: clientId,
-            path: {
-              color: pathData.color,
-              size: pathData.size,
-              points: pathData.points
-            }
-          });
-          
-          // حذف المسار من activePaths
-          activePathRef.remove();
-        }
-      });
-    } catch (err) {
-      console.warn("completePathInRoom err:", err);
+      console.warn("sendPathPointToRoom err:", err);
     }
   }
 
@@ -850,12 +848,13 @@
     }
   }
 
-  function sendUndoToRoom() {
+  function sendUndoToRoom(path) {
     if (!firebaseEnabled || !currentRoom || isSyncing) return;
     try {
       firebase.database().ref(`rooms/${currentRoom}/history`).push({ 
         clientId, 
         type: "undo", 
+        path: path,
         timestamp: Date.now() 
       });
     } catch (err) {
@@ -863,12 +862,13 @@
     }
   }
 
-  function sendRedoToRoom() {
+  function sendRedoToRoom(path) {
     if (!firebaseEnabled || !currentRoom || isSyncing) return;
     try {
       firebase.database().ref(`rooms/${currentRoom}/history`).push({ 
         clientId, 
         type: "redo", 
+        path: path,
         timestamp: Date.now() 
       });
     } catch (err) {
@@ -878,56 +878,33 @@
 
   function attachRoomListeners(room) {
     if (!firebaseEnabled || !room) return;
-    // detach previous listeners if any
+    
+    // فصل المستمعين السابقين
     if (pathsRef) pathsRef.off();
     if (eventsRef) eventsRef.off();
     if (historyRef) historyRef.off();
-    if (activePathsRef) activePathsRef.off();
 
-    pathsRef = firebase.database().ref(`rooms/${room}/paths`);
+    pathsRef = firebase.database().ref(`rooms/${room}/drawing`);
     eventsRef = firebase.database().ref(`rooms/${room}/events`);
     historyRef = firebase.database().ref(`rooms/${room}/history`);
-    activePathsRef = firebase.database().ref(`rooms/${room}/activePaths`);
 
-    // When a new path added
+    // متابعة الرسم من الآخرين - بدون تأثير على الزوم المحلي
     pathsRef.on('child_added', snapshot => {
-      const val = snapshot.val();
-      if (!val || val.clientId === clientId) return;
+      const data = snapshot.val();
+      if (!data || data.clientId === clientId) return;
       
-      if (val.path) {
-        paths.push(val.path);
-        drawAll();
-      }
+      // معالجة البيانات فور وصولها
+      processIncomingDrawing(data);
     });
 
-    // Listen for active paths (real-time drawing)
-    activePathsRef.on('child_added', snapshot => {
-      const val = snapshot.val();
-      if (!val || val.clientId === clientId) return;
-      
-      // نرسم المسار النشط
-      drawActivePath(val);
-    });
-
-    activePathsRef.on('child_changed', snapshot => {
-      const val = snapshot.val();
-      if (!val || val.clientId === clientId) return;
-      
-      // نرسم المسار النشط المحدث
-      drawActivePath(val);
-    });
-
-    activePathsRef.on('child_removed', snapshot => {
-      // لا نحتاج للقيام بأي شيء عند إزالة المسار النشط
-    });
-
-    // listen for events (clear, loadJson)
+    // أحداث المسح والتحميل
     eventsRef.on('child_added', snapshot => {
       const ev = snapshot.val();
       if (!ev || ev.clientId === clientId) return;
       
       if (ev.type === "clear") {
-        paths = [];
+        allPaths = [];
+        localPaths = [];
         undonePaths = [];
         drawAll();
       } else if (ev.type === "loadJson") {
@@ -935,82 +912,145 @@
       }
     });
 
-    // listen for history events (undo, redo)
+    // أحداث التراجع والإعادة
     historyRef.on('child_added', snapshot => {
       const action = snapshot.val();
       if (!action || action.clientId === clientId) return;
       
-      if (action.type === "undo" && paths.length > 0) {
-        undonePaths.push(paths.pop());
-        drawAll();
-      } else if (action.type === "redo" && undonePaths.length > 0) {
-        paths.push(undonePaths.pop());
+      if (action.type === "undo") {
+        // إزالة المسار من العرض
+        const pathIndex = allPaths.findIndex(p => 
+          p.clientId === action.clientId && 
+          JSON.stringify(p.points) === JSON.stringify(action.path.points)
+        );
+        if (pathIndex > -1) {
+          allPaths.splice(pathIndex, 1);
+          drawAll();
+        }
+      } else if (action.type === "redo") {
+        // إعادة المسار للعرض
+        allPaths.push(action.path);
         drawAll();
       }
     });
 
-    // تحديث حالة الاتصال
+    // تحديث حالة الاتصال وقياس البينغ
     firebase.database().ref('.info/connected').on('value', (snapshot) => {
       updateConnectionStatus(snapshot.val() === true);
     });
 
+    // بدء قياس البينغ
+    startPingMeasurement();
+
     listenersAttached = true;
   }
 
-  // رسم مسار نشط (قيد الرسم)
-  function drawActivePath(pathData) {
-    if (!pathData.points || pathData.points.length < 2) return;
-    
-    ctx.strokeStyle = pathData.color;
-    ctx.lineWidth = pathData.size;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.beginPath();
-    
-    // رسم جميع النقاط في المسار
-    for (let i = 0; i < pathData.points.length - 1; i++) {
-      ctx.moveTo(pathData.points[i].x, pathData.points[i].y);
-      ctx.lineTo(pathData.points[i + 1].x, pathData.points[i + 1].y);
+  // معالجة البيانات الواردة من الآخرين
+  function processIncomingDrawing(data) {
+    if (data.action === 'start') {
+      // بدء مسار جديد من مستخدم آخر
+      const newPath = {
+        color: data.color,
+        size: data.size,
+        points: [data.point],
+        clientId: data.clientId,
+        pathId: data.pathId
+      };
+      allPaths.push(newPath);
+    } 
+    else if (data.action === 'move') {
+      // إضافة نقطة لمسار موجود
+      const existingPath = allPaths.find(p => p.pathId === data.pathId);
+      if (existingPath && data.point) {
+        existingPath.points.push(data.point);
+        // رسم النقطة الجديدة فقط لتحسين الأداء
+        ctx.strokeStyle = existingPath.color;
+        ctx.lineWidth = existingPath.size;
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        if (existingPath.points.length > 1) {
+          const lastPoint = existingPath.points[existingPath.points.length - 2];
+          ctx.moveTo(lastPoint.x, lastPoint.y);
+          ctx.lineTo(data.point.x, data.point.y);
+        }
+        ctx.stroke();
+      }
+    }
+    else if (data.action === 'end') {
+      // لا حاجة لفعل شيء خاص لنهاية المسار
+      showSyncNotification(`↗️ رسم من مستخدم آخر`, 1200);
     }
     
-    ctx.stroke();
+    // تحديث معلومات الأداء
+    updatePerformanceInfo(Date.now() - data.timestamp);
+  }
+
+  // قياس سرعة الاتصال
+  function startPingMeasurement() {
+    if (pingInterval) clearInterval(pingInterval);
+    
+    pingInterval = setInterval(() => {
+      if (firebaseEnabled && currentRoom) {
+        lastPingTime = Date.now();
+        firebase.database().ref(`rooms/${currentRoom}/ping`).set({
+          clientId: clientId,
+          timestamp: lastPingTime
+        });
+      }
+    }, 3000);
+    
+    // مستمع للبينغ
+    firebase.database().ref(`rooms/${currentRoom}/ping`).on('child_added', (snapshot) => {
+      const pingData = snapshot.val();
+      if (pingData && pingData.clientId !== clientId) {
+        const ping = Date.now() - pingData.timestamp;
+        updatePerformanceInfo(ping);
+      }
+    });
   }
 
   newRoomBtn.addEventListener('click', () => {
     if (!firebaseEnabled) { 
-      alert("Firebase مش شغّال أو مش معدّ. اتأكد من config."); 
+      alert("Firebase غير نشط. تأكد من الإعدادات."); 
       return; 
     }
     const code = Math.random().toString(36).substring(2,8).toUpperCase();
     currentRoom = code;
-    // create room root
     firebase.database().ref(`rooms/${currentRoom}`).set({ created: Date.now() });
-    // clear local and attach listeners
-    paths = [];
+    
+    // مسح البيانات المحلية
+    localPaths = [];
+    allPaths = [];
     undonePaths = [];
     drawAll();
+    
+    // بدء المزامنة
     attachRoomListeners(currentRoom);
     leaveRoomBtn.style.display = 'block';
-    alert("تم إنشاء الغرفة: " + currentRoom);
+    showSyncNotification("تم إنشاء الغرفة: " + currentRoom, 2000);
     menuOpen = false;
     dropdownMenu.style.display = "none";
   });
 
   joinRoomBtn.addEventListener('click', () => {
     if (!firebaseEnabled) { 
-      alert("Firebase مش شغّال أو مش معدّ. اتأكد من config."); 
+      alert("Firebase غير نشط. تأكد من الإعدادات."); 
       return; 
     }
     const code = (roomCodeInput.value || "").trim().toUpperCase();
     if (!code) return alert("اكتب كود الغرفة!");
     currentRoom = code;
-    // clear local then attach listeners
-    paths = [];
+    
+    // مسح البيانات المحلية
+    localPaths = [];
+    allPaths = [];
     undonePaths = [];
     drawAll();
+    
+    // بدء المزامنة
     attachRoomListeners(currentRoom);
     leaveRoomBtn.style.display = 'block';
-    alert("انضممت إلى الغرفة: " + currentRoom);
+    showSyncNotification("انضممت للغرفة: " + currentRoom, 2000);
     menuOpen = false;
     dropdownMenu.style.display = "none";
   });
@@ -1019,12 +1059,12 @@
     if (pathsRef) pathsRef.off();
     if (eventsRef) eventsRef.off();
     if (historyRef) historyRef.off();
-    if (activePathsRef) activePathsRef.off();
+    if (pingInterval) clearInterval(pingInterval);
     
     currentRoom = null;
     leaveRoomBtn.style.display = 'none';
     updateConnectionStatus(false);
-    alert("غادرت الغرفة");
+    showSyncNotification("غادرت الغرفة", 1500);
     menuOpen = false;
     dropdownMenu.style.display = "none";
   });
@@ -1032,7 +1072,6 @@
   // تحديث حالة الاتصال الأولية
   updateConnectionStatus(firebaseEnabled);
 
-  // done
 </script>
 </body>
 </html>
