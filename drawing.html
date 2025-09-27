@@ -187,6 +187,15 @@
       background-color: #f44336;
     }
     
+    .room-code {
+      font-weight: bold;
+      background: #4CAF50;
+      color: white;
+      padding: 4px 8px;
+      border-radius: 4px;
+      margin-right: 5px;
+    }
+    
     .room-buttons {
       display: flex;
       flex-direction: column;
@@ -282,6 +291,7 @@
     <div class="room-status">
       <span class="status-indicator" id="connectionStatus"></span>
       <span>الحالة:</span>
+      <span class="room-code" id="roomCodeDisplay">—</span>
     </div>
     <input type="text" id="roomCodeInput" placeholder="كود الغرفة">
     <div class="room-buttons">
@@ -352,6 +362,7 @@
   const menuToggle = document.getElementById("menuToggle");
   const dropdownMenu = document.getElementById("dropdownMenu");
   const performanceInfo = document.getElementById("performanceInfo");
+  const roomCodeDisplay = document.getElementById("roomCodeDisplay");
 
   // Initialize canvas
   let width = window.innerWidth;
@@ -546,7 +557,7 @@
         sendPathPointToRoom(currentPath, null, 'end');
       }
       
-      showSyncNotification("✓ تم حفظ المسار", 800);
+      // تم إزالة رسالة "تم حفظ المسار"
     }
     drawing = false;
     currentPath = null;
@@ -620,7 +631,7 @@
         sendPathPointToRoom(currentPath, null, 'end');
       }
       
-      showSyncNotification("✓ تم حفظ المسار", 800);
+      // تم إزالة رسالة "تم حفظ المسار"
     }
     drawing = false;
     currentPath = null;
@@ -781,6 +792,14 @@
       connectionStatus.className = "status-indicator status-connected";
     } else {
       connectionStatus.className = "status-indicator status-disconnected";
+    }
+  }
+
+  function updateRoomCodeDisplay() {
+    if (currentRoom) {
+      roomCodeDisplay.textContent = currentRoom;
+    } else {
+      roomCodeDisplay.textContent = "—";
     }
   }
 
@@ -977,8 +996,7 @@
       }
     }
     else if (data.action === 'end') {
-      // لا حاجة لفعل شيء خاص لنهاية المسار
-      showSyncNotification(`↗️ رسم من مستخدم آخر`, 1200);
+      // تم إزالة رسالة "رسم من مستخدم آخر"
     }
     
     // تحديث معلومات الأداء
@@ -1027,6 +1045,7 @@
     // بدء المزامنة
     attachRoomListeners(currentRoom);
     leaveRoomBtn.style.display = 'block';
+    updateRoomCodeDisplay();
     showSyncNotification("تم إنشاء الغرفة: " + currentRoom, 2000);
     menuOpen = false;
     dropdownMenu.style.display = "none";
@@ -1050,6 +1069,7 @@
     // بدء المزامنة
     attachRoomListeners(currentRoom);
     leaveRoomBtn.style.display = 'block';
+    updateRoomCodeDisplay();
     showSyncNotification("انضممت للغرفة: " + currentRoom, 2000);
     menuOpen = false;
     dropdownMenu.style.display = "none";
@@ -1064,6 +1084,7 @@
     currentRoom = null;
     leaveRoomBtn.style.display = 'none';
     updateConnectionStatus(false);
+    updateRoomCodeDisplay();
     showSyncNotification("غادرت الغرفة", 1500);
     menuOpen = false;
     dropdownMenu.style.display = "none";
@@ -1071,6 +1092,7 @@
 
   // تحديث حالة الاتصال الأولية
   updateConnectionStatus(firebaseEnabled);
+  updateRoomCodeDisplay();
 
 </script>
 </body>
