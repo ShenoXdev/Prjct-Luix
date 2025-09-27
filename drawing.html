@@ -370,9 +370,9 @@
   canvas.width = width;
   canvas.height = height;
 
-  // Drawing state - كل جهاز يحتفظ برسمه الخاص
-  let localPaths = []; // المسارات المحلية فقط
-  let allPaths = []; // جميع المسارات (المحلية + الأخرى)
+  // Drawing state - جميع المسارات المشتركة
+  let allPaths = []; // جميع المسارات من جميع الأجهزة
+  let localPaths = []; // المسارات المحلية فقط (للتراجع)
   let undonePaths = [];
   let currentPath = null;
   let drawing = false;
@@ -389,7 +389,7 @@
   let zoomEndTime = 0;
   const ZOOM_COOLDOWN = 200;
   const MIN_ZOOM = 0.1;
-  const MAX_ZOOM = 20;
+  const MAX_ZOOM = 10e25;
 
   // Sync state
   let isSyncing = false;
@@ -425,16 +425,19 @@
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.setTransform(zoom, 0, 0, zoom, panX, panY);
 
-    // رسم جميع المسارات (المحلية والأخرى)
+    // رسم جميع المسارات من جميع الأجهزة
     for (let path of allPaths) {
       ctx.strokeStyle = path.color;
       ctx.lineWidth = path.size;
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
       ctx.beginPath();
-      for (let i = 0; i < path.points.length - 1; i++) {
-        ctx.moveTo(path.points[i].x, path.points[i].y);
-        ctx.lineTo(path.points[i + 1].x, path.points[i + 1].y);
+      
+      if (path.points && path.points.length > 0) {
+        ctx.moveTo(path.points[0].x, path.points[0].y);
+        for (let i = 1; i < path.points.length; i++) {
+          ctx.lineTo(path.points[i].x, path.points[i].y);
+        }
       }
       ctx.stroke();
     }
@@ -478,14 +481,15 @@
         color: colorPicker.value,
         size: parseFloat(brushSize.value),
         points: [{x: lastX, y: lastY}],
-        clientId: clientId // إضافة معرف العميل للمسار
+        clientId: clientId,
+        timestamp: Date.now()
       };
       drawing = true;
       hasMoved = false;
       
-      // إرسال بداية المسار فوراً
+      // إرسال بداية المسار فوراً لجميع الأجهزة
       if (firebaseEnabled && currentRoom) {
-        sendPathPointToRoom(currentPath, pos, 'start');
+        sendPathToRoom(currentPath, 'start');
       }
     }
   });
@@ -532,9 +536,9 @@
         lastX = pos.x;
         lastY = pos.y;
         
-        // إرسال النقطة فوراً مع تحسين الأداء
+        // إرسال النقطة فوراً لجميع الأجهزة
         if (firebaseEnabled && currentRoom) {
-          sendPathPointToRoom(currentPath, pos, 'move');
+          sendPathToRoom(currentPath, 'move');
         }
       }
     }
@@ -552,12 +556,10 @@
       allPaths.push(currentPath);
       undonePaths = [];
       
-      // إرسال نهاية المسار
+      // إرسال نهاية المسار لجميع الأجهزة
       if (firebaseEnabled && currentRoom) {
-        sendPathPointToRoom(currentPath, null, 'end');
+        sendPathToRoom(currentPath, 'end');
       }
-      
-      // تم إزالة رسالة "تم حفظ المسار"
     }
     drawing = false;
     currentPath = null;
@@ -574,14 +576,15 @@
         color: colorPicker.value,
         size: parseFloat(brushSize.value),
         points: [{x: lastX, y: lastY}],
-        clientId: clientId
+        clientId: clientId,
+        timestamp: Date.now()
       };
       drawing = true;
       hasMoved = false;
       
-      // إرسال بداية المسار فوراً
+      // إرسال بداية المسار فوراً لجميع الأجهزة
       if (firebaseEnabled && currentRoom) {
-        sendPathPointToRoom(currentPath, pos, 'start');
+        sendPathToRoom(currentPath, 'start');
       }
     }
   });
@@ -612,9 +615,9 @@
         lastX = pos.x;
         lastY = pos.y;
         
-        // إرسال النقطة فوراً
+        // إرسال النقطة فوراً لجميع الأجهزة
         if (firebaseEnabled && currentRoom) {
-          sendPathPointToRoom(currentPath, pos, 'move');
+          sendPathToRoom(currentPath, 'move');
         }
       }
     }
@@ -626,12 +629,10 @@
       allPaths.push(currentPath);
       undonePaths = [];
       
-      // إرسال نهاية المسار
+      // إرسال نهاية المسار لجميع الأجهزة
       if (firebaseEnabled && currentRoom) {
-        sendPathPointToRoom(currentPath, null, 'end');
+        sendPathToRoom(currentPath, 'end');
       }
-      
-      // تم إزالة رسالة "تم حفظ المسار"
     }
     drawing = false;
     currentPath = null;
@@ -644,9 +645,9 @@
       allPaths.push(currentPath);
       undonePaths = [];
       
-      // إرسال نهاية المسار
+      // إرسال نهاية المسار لجميع الأجهزة
       if (firebaseEnabled && currentRoom) {
-        sendPathPointToRoom(currentPath, null, 'end');
+        sendPathToRoom(currentPath, 'end');
       }
     }
     drawing = false;
@@ -663,7 +664,7 @@
     panX = 0;
     panY = 0;
     drawAll();
-    // إرسال أمر المسح للجميع
+    // إرسال أمر المسح لجميع الأجهزة
     sendClearToRoom();
   });
 
@@ -707,7 +708,7 @@
         const data = JSON.parse(event.target.result);
         loadJsonData(data);
         
-        // إرسال البيانات للغرفة
+        // إرسال البيانات لجميع الأجهزة
         if (firebaseEnabled && currentRoom) {
           sendJsonToRoom(data);
         }
@@ -730,7 +731,7 @@
       undonePaths.push(undonePath);
       drawAll();
       
-      // إرسال أمر التراجع
+      // إرسال أمر التراجع لجميع الأجهزة
       sendUndoToRoom(undonePath);
     }
   });
@@ -742,7 +743,7 @@
       allPaths.push(redonePath);
       drawAll();
       
-      // إرسال أمر الإعادة
+      // إرسال أمر الإعادة لجميع الأجهزة
       sendRedoToRoom(redonePath);
     }
   });
@@ -774,7 +775,7 @@
   drawAll();
 
   /***********************
-   * نظام المزامنة المحسّن بدون تداخل زوم
+   * نظام المزامنة المحسّن - الرسم يظهر لجميع الأجهزة
    ***********************/
   const newRoomBtn = document.getElementById("newRoomBtn");
   const joinRoomBtn = document.getElementById("joinRoomBtn");
@@ -818,25 +819,22 @@
     }, 100);
   }
 
-  // إرسال نقطة مسار مع التحسين
-  function sendPathPointToRoom(path, point, action) {
+  // إرسال المسار لجميع الأجهزة في الغرفة
+  function sendPathToRoom(path, action) {
     if (!firebaseEnabled || !currentRoom || isSyncing) return;
     
     try {
       const data = {
         clientId: clientId,
-        pathId: path.clientId + Date.now(), // معرف فريد للمسار
-        color: path.color,
-        size: path.size,
-        point: point,
+        path: path,
         action: action,
         timestamp: Date.now()
       };
       
-      // إرسال البيانات فوراً بدون تأخير
-      firebase.database().ref(`rooms/${currentRoom}/drawing`).push(data);
+      // إرسال البيانات فوراً لجميع الأجهزة
+      firebase.database().ref(`rooms/${currentRoom}/paths`).push(data);
     } catch (err) {
-      console.warn("sendPathPointToRoom err:", err);
+      console.warn("sendPathToRoom err:", err);
     }
   }
 
@@ -903,20 +901,20 @@
     if (eventsRef) eventsRef.off();
     if (historyRef) historyRef.off();
 
-    pathsRef = firebase.database().ref(`rooms/${room}/drawing`);
+    pathsRef = firebase.database().ref(`rooms/${room}/paths`);
     eventsRef = firebase.database().ref(`rooms/${room}/events`);
     historyRef = firebase.database().ref(`rooms/${room}/history`);
 
-    // متابعة الرسم من الآخرين - بدون تأثير على الزوم المحلي
+    // متابعة الرسم من جميع الأجهزة في الغرفة
     pathsRef.on('child_added', snapshot => {
       const data = snapshot.val();
       if (!data || data.clientId === clientId) return;
       
-      // معالجة البيانات فور وصولها
-      processIncomingDrawing(data);
+      // معالجة البيانات فور وصولها من الأجهزة الأخرى
+      processIncomingPath(data);
     });
 
-    // أحداث المسح والتحميل
+    // أحداث المسح والتحميل من الأجهزة الأخرى
     eventsRef.on('child_added', snapshot => {
       const ev = snapshot.val();
       if (!ev || ev.clientId === clientId) return;
@@ -931,7 +929,7 @@
       }
     });
 
-    // أحداث التراجع والإعادة
+    // أحداث التراجع والإعادة من الأجهزة الأخرى
     historyRef.on('child_added', snapshot => {
       const action = snapshot.val();
       if (!action || action.clientId === clientId) return;
@@ -940,7 +938,7 @@
         // إزالة المسار من العرض
         const pathIndex = allPaths.findIndex(p => 
           p.clientId === action.clientId && 
-          JSON.stringify(p.points) === JSON.stringify(action.path.points)
+          p.timestamp === action.path.timestamp
         );
         if (pathIndex > -1) {
           allPaths.splice(pathIndex, 1);
@@ -964,39 +962,34 @@
     listenersAttached = true;
   }
 
-  // معالجة البيانات الواردة من الآخرين
-  function processIncomingDrawing(data) {
+  // معالجة المسارات الواردة من الأجهزة الأخرى
+  function processIncomingPath(data) {
     if (data.action === 'start') {
-      // بدء مسار جديد من مستخدم آخر
-      const newPath = {
-        color: data.color,
-        size: data.size,
-        points: [data.point],
-        clientId: data.clientId,
-        pathId: data.pathId
-      };
-      allPaths.push(newPath);
+      // بدء مسار جديد من جهاز آخر
+      allPaths.push(data.path);
     } 
     else if (data.action === 'move') {
-      // إضافة نقطة لمسار موجود
-      const existingPath = allPaths.find(p => p.pathId === data.pathId);
-      if (existingPath && data.point) {
-        existingPath.points.push(data.point);
-        // رسم النقطة الجديدة فقط لتحسين الأداء
-        ctx.strokeStyle = existingPath.color;
-        ctx.lineWidth = existingPath.size;
-        ctx.lineCap = "round";
-        ctx.beginPath();
-        if (existingPath.points.length > 1) {
-          const lastPoint = existingPath.points[existingPath.points.length - 2];
-          ctx.moveTo(lastPoint.x, lastPoint.y);
-          ctx.lineTo(data.point.x, data.point.y);
-        }
-        ctx.stroke();
+      // تحديث مسار موجود من جهاز آخر
+      const existingPathIndex = allPaths.findIndex(p => 
+        p.clientId === data.clientId && 
+        p.timestamp === data.path.timestamp
+      );
+      
+      if (existingPathIndex > -1) {
+        // تحديث المسار الحالي بالنقاط الجديدة
+        allPaths[existingPathIndex] = data.path;
+        
+        // إعادة رسم اللوحة كاملة للتأكد من ظهور التحديثات
+        drawAll();
+      } else {
+        // إذا لم يتم العثور على المسار، نضيفه كمسار جديد
+        allPaths.push(data.path);
+        drawAll();
       }
     }
     else if (data.action === 'end') {
-      // تم إزالة رسالة "رسم من مستخدم آخر"
+      // تأكيد نهاية المسار - لا حاجة لفعل شيء إضافي
+      drawAll(); // إعادة الرسم للتأكد من ظهور التحديثات
     }
     
     // تحديث معلومات الأداء
