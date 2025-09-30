@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>بيانو تفاعلي</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      touch-action: none;
+      font-family: sans-serif;
+      background: #f5f5f5;
+    }
+    
+    /* شريط الأدوات العلوي */
+    #topBar {
+      position: fixed;
+      top: 0;
+      right: 0;
+      left: 0;
+      background: #f0f0f0;
+      padding: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 10;
+      height: 40px;
+      box-sizing: border-box;
+      border-bottom: 1px solid #ccc;
+    }
+    
+    /* شريط الأدوات السفلي */
+    #bottomBar {
+      position: fixed;
+      bottom: 0;
+      right: 0;
+      left: 0;
+      background: #f0f0f0;
+      padding: 8px;
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      z-index: 10;
+      height: 50px;
+      box-sizing: border-box;
+      border-top: 1px solid #ccc;
+    }
+    
+    /* القائمة المنبثقة */
+    #dropdownMenu {
+      position: fixed;
+      bottom: 60px;
+      left: 10px;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+      z-index: 20;
+      display: none;
+      flex-direction: column;
+      min-width: 150px;
+      overflow: hidden;
+    }
+    
+    #dropdownMenu button {
+      border: none;
+      background: none;
+      padding: 12px;
+      text-align: right;
+      font-size: 14px;
+      border-bottom: 1px solid #eee;
+    }
+    
+    #dropdownMenu button:last-child {
+      border-bottom: none;
+    }
+    
+    #dropdownMenu button:hover {
+      background: #f5f5f5;
+    }
+    
+    /* أزرار القائمة الرئيسية */
+    .menu-button {
+      background: none;
+      border: none;
+      font-size: 20px;
+      cursor: pointer;
+      padding: 5px 10px;
+    }
+    
+    /* أزرار الأدوات */
+    .tool-button {
+      background: white;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 14px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 44px;
+      height: 36px;
+    }
+    
+    /* عناصر التحكم */
+    .control-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .control-group label {
+      font-size: 14px;
+      white-space: nowrap;
+    }
+    
+    #octaveValue {
+      font-weight: bold;
+      min-width: 20px;
+      text-align: center;
+    }
+    
+    .piano-container {
+      position: absolute;
+      top: 40px;
+      left: 0;
+      width: 100%;
+      height: calc(100% - 90px);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: #f5f5f5;
+      overflow-x: auto;
+      padding: 10px 0;
+    }
+    
+    .piano {
+      display: flex;
+      position: relative;
+      height: 200px;
+      min-width: 600px;
+      background: #f0f0f0;
+      border-radius: 8px;
+      padding: 10px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    
+    .white-key {
+      width: 50px;
+      height: 100%;
+      background: linear-gradient(to bottom, #fff 0%, #f5f5f5 100%);
+      border: 1px solid #ccc;
+      border-radius: 0 0 5px 5px;
+      margin: 0 2px;
+      cursor: pointer;
+      position: relative;
+      z-index: 1;
+      box-shadow: 0 3px 5px rgba(0, 0, 0, 0.1);
+      transition: all 0.1s;
+    }
+    
+    .white-key:hover {
+      background: linear-gradient(to bottom, #f0f0f0 0%, #e5e5e5 100%);
+    }
+    
+    .white-key.active {
+      background: linear-gradient(to bottom, #e0e0e0 0%, #d5d5d5 100%);
+      box-shadow: inset 0 2px 3px rgba(0, 0, 0, 0.1);
+      transform: translateY(2px);
+    }
+    
+    .black-key {
+      width: 30px;
+      height: 60%;
+      background: linear-gradient(to bottom, #333 0%, #000 100%);
+      border-radius: 0 0 3px 3px;
+      position: absolute;
+      z-index: 2;
+      cursor: pointer;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+      transition: all 0.1s;
+    }
+    
+    .black-key:hover {
+      background: linear-gradient(to bottom, #222 0%, #111 100%);
+    }
+    
+    .black-key.active {
+      background: linear-gradient(to bottom, #111 0%, #000 100%);
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3);
+      transform: translateY(1px);
+    }
+    
+    .key-label {
+      position: absolute;
+      bottom: 10px;
+      width: 100%;
+      text-align: center;
+      font-weight: bold;
+      color: #333;
+      font-size: 12px;
+    }
+    
+    .black-key .key-label {
+      color: #fff;
+      bottom: 5px;
+    }
+    
+    .note-display {
+      position: fixed;
+      top: 45px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.7);
+      color: white;
+      padding: 8px 16px;
+      border-radius: 5px;
+      font-size: 14px;
+      z-index: 15;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    
+    .note-display.show {
+      opacity: 1;
+    }
+    
+    @media (max-width: 768px) {
+      .piano {
+        height: 150px;
+        min-width: 450px;
+      }
+      
+      .white-key {
+        width: 35px;
+      }
+      
+      .black-key {
+        width: 25px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<!-- الشريط العلوي -->
+<div id="topBar">
+  <div class="control-group">
+    <label for="octaveValue">الأوكتاف:</label>
+    <span id="octaveValue">4</span>
+  </div>
+  
+  <button id="menuToggle" class="menu-button">⋯</button>
+</div>
+
+<!-- الشريط السفلي -->
+<div id="bottomBar">
+  <button id="prevOctave" class="tool-button">⬅️</button>
+  <button id="nextOctave" class="tool-button">➡️</button>
+  <button id="sustainBtn" class="tool-button">🔊</button>
+</div>
+
+<!-- القائمة المنبثقة -->
+<div id="dropdownMenu">
+  <button id="helpBtn">❓ مساعدة</button>
+  <button id="keyboardBtn">⌨️ لوحة المفاتيح</button>
+</div>
+
+<!-- عرض النوتة -->
+<div class="note-display" id="noteDisplay"></div>
+
+<!-- البيانو -->
+<div class="piano-container">
+  <div class="piano" id="piano">
+    <!-- سيتم إنشاء مفاتيح البيانو باستخدام JavaScript -->
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const piano = document.getElementById('piano');
+    const noteDisplay = document.getElementById('noteDisplay');
+    const octaveValue = document.getElementById('octaveValue');
+    const prevOctaveBtn = document.getElementById('prevOctave');
+    const nextOctaveBtn = document.getElementById('nextOctave');
+    const sustainBtn = document.getElementById('sustainBtn');
+    const menuToggle = document.getElementById('menuToggle');
+    const dropdownMenu = document.getElementById('dropdownMenu');
+    const helpBtn = document.getElementById('helpBtn');
+    const keyboardBtn = document.getElementById('keyboardBtn');
+    
+    let currentOctave = 4;
+    let sustainEnabled = false;
+    let menuOpen = false;
+    let activeOscillators = []; // لتتبع جميع الأوسيليتورز النشطة
+    
+    // نوتات البيانو
+    const whiteKeys = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
+    const blackKeys = ['C#', 'D#', '', 'F#', 'G#', 'A#', ''];
+    
+    // إنشاء مفاتيح البيانو
+    function createPianoKeys() {
+      piano.innerHTML = '';
+      
+      // إنشاء المفاتيح البيضاء
+      whiteKeys.forEach((note, index) => {
+        const whiteKey = document.createElement('div');
+        whiteKey.className = 'white-key';
+        whiteKey.dataset.note = note + currentOctave;
+        
+        const keyLabel = document.createElement('div');
+        keyLabel.className = 'key-label';
+        keyLabel.textContent = note;
+        
+        whiteKey.appendChild(keyLabel);
+        piano.appendChild(whiteKey);
+        
+        // إضافة مستمعي الأحداث
+        whiteKey.addEventListener('mousedown', () => playNote(note + currentOctave, whiteKey));
+        whiteKey.addEventListener('mouseup', () => stopNote(whiteKey));
+        whiteKey.addEventListener('mouseleave', () => stopNote(whiteKey));
+        
+        // أحداث اللمس
+        whiteKey.addEventListener('touchstart', (e) => {
+          e.preventDefault();
+          playNote(note + currentOctave, whiteKey);
+        });
+        
+        whiteKey.addEventListener('touchend', (e) => {
+          e.preventDefault();
+          stopNote(whiteKey);
+        });
+      });
+      
+      // إنشاء المفاتيح السوداء
+      blackKeys.forEach((note, index) => {
+        if (note) {
+          const blackKey = document.createElement('div');
+          blackKey.className = 'black-key';
+          blackKey.dataset.note = note + currentOctave;
+          
+          // تحديد الموضع
+          const position = (index * 50) + 35;
+          blackKey.style.left = `${position}px`;
+          
+          const keyLabel = document.createElement('div');
+          keyLabel.className = 'key-label';
+          keyLabel.textContent = note;
+          
+          blackKey.appendChild(keyLabel);
+          piano.appendChild(blackKey);
+          
+          // إضافة مستمعي الأحداث
+          blackKey.addEventListener('mousedown', () => playNote(note + currentOctave, blackKey));
+          blackKey.addEventListener('mouseup', () => stopNote(blackKey));
+          blackKey.addEventListener('mouseleave', () => stopNote(blackKey));
+          
+          // أحداث اللمس
+          blackKey.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            playNote(note + currentOctave, blackKey);
+          });
+          
+          blackKey.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            stopNote(blackKey);
+          });
+        }
+      });
+    }
+    
+    // تشغيل النوتة
+    function playNote(note, element) {
+      element.classList.add('active');
+      showNoteDisplay(note);
+      
+      // محاكاة الصوت باستخدام Web Audio API
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      // تعيين التردد بناءً على النوتة
+      oscillator.frequency.value = getFrequency(note);
+      oscillator.type = 'sine';
+      
+      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+      
+      // إذا كانت خاصية الاستدامة غير مفعلة، نوقف الصوت بعد ثانية
+      if (!sustainEnabled) {
+        gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 1);
+      }
+      
+      oscillator.start();
+      
+      // تخزين المرجع لإيقاف الصوت لاحقًا
+      const oscillatorData = {
+        oscillator: oscillator,
+        gainNode: gainNode,
+        audioContext: audioContext,
+        element: element
+      };
+      
+      element.oscillatorData = oscillatorData;
+      activeOscillators.push(oscillatorData);
+    }
+    
+    // إيقاف النوتة
+    function stopNote(element) {
+      // إذا كانت خاصية الاستدامة مفعلة، لا نوقف الصوت
+      if (sustainEnabled) return;
+      
+      if (element.oscillatorData) {
+        const { oscillator, gainNode, audioContext } = element.oscillatorData;
+        
+        gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.1);
+        setTimeout(() => {
+          if (oscillator) {
+            oscillator.stop();
+            
+            // إزالة الأوسيليتور من المصفوفة النشطة
+            const index = activeOscillators.findIndex(osc => osc.oscillator === oscillator);
+            if (index !== -1) {
+              activeOscillators.splice(index, 1);
+            }
+          }
+        }, 100);
+        
+        element.oscillatorData = null;
+      }
+      element.classList.remove('active');
+    }
+    
+    // إيقاف جميع الأصوات النشطة
+    function stopAllSounds() {
+      activeOscillators.forEach(oscData => {
+        const { oscillator, gainNode, audioContext, element } = oscData;
+        
+        if (oscillator) {
+          gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.1);
+          setTimeout(() => {
+            oscillator.stop();
+            if (element) {
+              element.classList.remove('active');
+              element.oscillatorData = null;
+            }
+          }, 100);
+        }
+      });
+      
+      // تفريغ المصفوفة
+      activeOscillators = [];
+    }
+    
+    // عرض النوتة
+    function showNoteDisplay(note) {
+      noteDisplay.textContent = `النوتة: ${note}`;
+      noteDisplay.classList.add('show');
+      
+      setTimeout(() => {
+        noteDisplay.classList.remove('show');
+      }, 1000);
+    }
+    
+    // حساب التردد بناءً على النوتة
+    function getFrequency(note) {
+      const baseFreq = 261.63; // C4
+      const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+      
+      const noteName = note.slice(0, -1);
+      const octave = parseInt(note.slice(-1));
+      
+      const noteIndex = noteNames.indexOf(noteName);
+      const stepsFromC4 = noteIndex + (octave - 4) * 12;
+      
+      return baseFreq * Math.pow(2, stepsFromC4 / 12);
+    }
+    
+    // تحديث عرض الأوكتاف
+    function updateOctaveDisplay() {
+      octaveValue.textContent = currentOctave;
+      createPianoKeys();
+    }
+    
+    // أحداث الأزرار
+    prevOctaveBtn.addEventListener('click', () => {
+      if (currentOctave > 1) {
+        currentOctave--;
+        updateOctaveDisplay();
+      }
+    });
+    
+    nextOctaveBtn.addEventListener('click', () => {
+      if (currentOctave < 7) {
+        currentOctave++;
+        updateOctaveDisplay();
+      }
+    });
+    
+    sustainBtn.addEventListener('click', () => {
+      sustainEnabled = !sustainEnabled;
+      
+      if (sustainEnabled) {
+        sustainBtn.textContent = '🔇';
+        sustainBtn.style.background = 'rgba(255, 100, 100, 0.3)';
+      } else {
+        sustainBtn.textContent = '🔊';
+        sustainBtn.style.background = 'white';
+        // عند إلغاء تفعيل الاستدامة، نوقف جميع الأصوات النشطة
+        stopAllSounds();
+      }
+    });
+    
+    // إضافة دعم لوحة المفاتيح
+    document.addEventListener('keydown', (e) => {
+      const keyMap = {
+        'a': 'C', 's': 'D', 'd': 'E', 'f': 'F', 'g': 'G', 'h': 'A', 'j': 'B',
+        'w': 'C#', 'e': 'D#', 't': 'F#', 'y': 'G#', 'u': 'A#'
+      };
+      
+      const note = keyMap[e.key.toLowerCase()];
+      if (note) {
+        const element = document.querySelector(`[data-note="${note + currentOctave}"]`);
+        if (element && !element.classList.contains('active')) {
+          playNote(note + currentOctave, element);
+        }
+      }
+    });
+    
+    document.addEventListener('keyup', (e) => {
+      const keyMap = {
+        'a': 'C', 's': 'D', 'd': 'E', 'f': 'F', 'g': 'G', 'h': 'A', 'j': 'B',
+        'w': 'C#', 'e': 'D#', 't': 'F#', 'y': 'G#', 'u': 'A#'
+      };
+      
+      const note = keyMap[e.key.toLowerCase()];
+      if (note) {
+        const element = document.querySelector(`[data-note="${note + currentOctave}"]`);
+        if (element) {
+          stopNote(element);
+        }
+      }
+    });
+    
+    // Toggle menu
+    menuToggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      menuOpen = !menuOpen;
+      dropdownMenu.style.display = menuOpen ? 'flex' : 'none';
+    });
+    
+    // Close menu when clicking outside
+    document.addEventListener('click', (e) => {
+      if (menuOpen && !dropdownMenu.contains(e.target) && e.target !== menuToggle) {
+        menuOpen = false;
+        dropdownMenu.style.display = 'none';
+      }
+    });
+    
+    // أحداث القائمة المنبثقة
+    helpBtn.addEventListener('click', () => {
+      alert('استخدم الماوس أو لوحة المفاتيح للعزف:\nA, S, D, F, G, H, J للمفاتيح البيضاء\nW, E, T, Y, U للمفاتيح السوداء');
+      menuOpen = false;
+      dropdownMenu.style.display = 'none';
+    });
+    
+    keyboardBtn.addEventListener('click', () => {
+      alert('لوحة المفاتيح:\n\nالمفاتيح البيضاء:\nA = C, S = D, D = E, F = F, G = G, H = A, J = B\n\nالمفاتيح السوداء:\nW = C#, E = D#, T = F#, Y = G#, U = A#');
+      menuOpen = false;
+      dropdownMenu.style.display = 'none';
+    });
+    
+    // تهيئة البيانو
+    createPianoKeys();
+  });
+</script>
+</body>
+</html>
