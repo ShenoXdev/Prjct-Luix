@@ -193,7 +193,7 @@
   function startDrawing(sx, sy) {
     drawing = true;
     const pos = toCanvas(sx, sy);
-    currentPath = { color: colorPicker.value, size: parseFloat(brushSize.value), points: [pos] };
+    currentPath = { color: colorPicker.value, size: parseFloat(brushSize.value), points: [pos], t: Date.now() };
     if (currentRoom) {
       const ref = db.ref(`rooms/${currentRoom}/paths`).push();
       currentPathId = ref.key;
@@ -235,6 +235,10 @@
     if (e.touches.length === 2) {
       stopDrawing();           // أنهِ أي رسم جارٍ
       isZooming = true;
+      // امسح أي مسار اتعمل في آخر 0.7 ثانية
+      const cutoff = Date.now() - 700;
+      paths = paths.filter(p => !p.t || p.t < cutoff);
+      drawAll();
       const t0 = e.touches[0], t1 = e.touches[1];
       lastTouchDist = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
       lastMidX = (t0.clientX + t1.clientX) / 2;
