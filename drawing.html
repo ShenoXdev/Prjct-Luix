@@ -319,17 +319,23 @@ function drawPencilSegment(c, x1, y1, x2, y2, size, color) {
   const g = parseInt(color.slice(3,5),16);
   const b = parseInt(color.slice(5,7),16);
 
-  const step  = 3.5;
+  // المسافة بين النقط تتأثر بالحجم — كل ما الحجم كبر النقط اتقربت
+  const step  = Math.max(0.8, 2.2 - size * 0.08);
   const steps = Math.max(1, Math.floor(len / step));
+
+  // حجم النقطة يتناسب مع الـ size
+  const baseRad = 0.15 + size * 0.045;
 
   c.save();
   for (let i = 0; i <= steps; i++) {
-    if (Math.random() < 0.40) continue;
+    // 55% تخطي — نقط متفرقة أكثر
+    if (Math.random() < 0.55) continue;
     const t   = i / steps;
     const px  = x1 + dx * t;
     const py  = y1 + dy * t;
-    const a   = 0.25 + Math.random() * 0.60;
-    const rad = 0.4  + Math.random() * 0.7;
+    // opacity أقل: 0.08 → 0.38
+    const a   = 0.08 + Math.random() * 0.30;
+    const rad = baseRad * (0.5 + Math.random() * 0.8);
     c.beginPath();
     c.arc(px, py, rad, 0, Math.PI * 2);
     c.fillStyle = `rgba(${r},${g},${b},${a.toFixed(2)})`;
@@ -381,7 +387,7 @@ function toCanvas(sx, sy) {
 
 /* ═══════════ Zoom ═══════════ */
 function applyZoom(nz, px, py) {
-  nz = Math.max(0.0000000000000000000000000000000000000001, Math.min(nz, 100));
+  nz = Math.max(0.05, Math.min(nz, 100));
   const r  = canvas.getBoundingClientRect();
   const wx = (px - r.left - panX) / zoom;
   const wy = (py - r.top  - panY) / zoom;
