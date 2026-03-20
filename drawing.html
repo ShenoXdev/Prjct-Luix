@@ -265,7 +265,7 @@ function resizeCanvas() {
   canvas.height = window.innerHeight - 96;
 }
 resizeCanvas();
-window.addEventListener("resize", () => { resizeCanvas(); drawAll(); });
+window.addEventListener("resize", () => { resizeCanvas(); offDirty = true; drawAll(); });
 
 /* ═══════════ State ═══════════ */
 let paths = [], undonePaths = [], currentPath = null;
@@ -334,7 +334,7 @@ function drawPencilSegment(c, x1, y1, x2, y2, size, color) {
     const px = x1 + dx * t + ox;
     const py = y1 + dy * t + oy;
 
-    const a   = 0.06 + Math.random() * 0.28;
+    const a   = 0.18 + Math.random() * 0.52;
     const rad = baseRad * (0.3 + Math.random() * 1.0);
 
     // شكل عشوائي: مستطيل صغير، مربع مدوّر، أو شكل حر
@@ -365,8 +365,21 @@ function drawPencilSegment(c, x1, y1, x2, y2, size, color) {
   c.restore();
 }
 
-/* ═══════════ Draw ═══════════ */
-function drawPath(c, path) {
+/* ═══════════ Offscreen canvas — يخزن الرسم الثابت ═══════════ */
+const offscreen    = document.createElement("canvas");
+const offCtx       = offscreen.getContext("2d");
+let   offDirty     = false; // محتاج نعيد بناء الـ offscreen؟
+
+function syncOffscreenSize() {
+  if (offscreen.width !== canvas.width || offscreen.height !== canvas.height) {
+    offscreen.width  = canvas.width;
+    offscreen.height = canvas.height;
+    offDirty = true;
+  }
+}
+
+/* يرسم path واحد على أي context بدون transform (إحداثيات عالم) */
+function drawPathRaw(c, path) {
   if (!path.points || path.points.length < 2) return;
   c.save();
   if (path.tool === "pencil") {
@@ -393,11 +406,29 @@ function drawPath(c, path) {
   c.restore();
 }
 
+/* يبني الـ offscreen من الصفر بكل الـ paths */
+function rebuildOffscreen() {
+  syncOffscreenSize();
+  offCtx.setTransform(1, 0, 0, 1, 0, 0);
+  offCtx.clearRect(0, 0, offscreen.width, offscreen.height);
+  offCtx.setTransform(zoom, 0, 0, zoom, panX, panY);
+  paths.forEach(p => drawPathRaw(offCtx, p));
+  offDirty = false;
+}
+
+/* يضيف path جديد على الـ offscreen بدون إعادة رسم الكل */
+function stampPathToOffscreen(path) {
+  syncOffscreenSize();
+  offCtx.setTransform(zoom, 0, 0, zoom, panX, panY);
+  drawPathRaw(offCtx, path);
+}
+
 function drawAll() {
+  syncOffscreenSize();
+  if (offDirty) rebuildOffscreen();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.setTransform(zoom, 0, 0, zoom, panX, panY);
-  paths.forEach(p => drawPath(ctx, p));
+  ctx.drawImage(offscreen, 0, 0);
   updateZoomInfo();
 }
 
@@ -415,6 +446,7 @@ function applyZoom(nz, px, py) {
   zoom = nz;
   panX = px - r.left - wx * zoom;
   panY = py - r.top  - wy * zoom;
+  offDirty = true; // التحويل اتغير — أعد بناء الـ offscreen
   drawAll();
 }
 
@@ -456,7 +488,11 @@ function continueDrawing(sx, sy) {
 }
 
 function stopDrawing() {
-  if (drawing && currentPath) { paths.push(currentPath); undonePaths = []; }
+  if (drawing && currentPath) {
+    paths.push(currentPath);
+    undonePaths = [];
+    stampPathToOffscreen(currentPath); // أضف الـ path الجديد على الـ offscreen مباشرة
+  }
   drawing = false; currentPath = null;
 }
 
@@ -537,19 +573,19 @@ document.addEventListener("click", () => {
 /* ═══════════ Buttons ═══════════ */
 document.getElementById("clearBtn").onclick = () => {
   if (currentRoom) db.ref(`rooms/${currentRoom}/paths`).remove();
-  paths = []; undonePaths = []; drawAll();
+  paths = []; undonePaths = []; offDirty = true; drawAll();
 };
 document.getElementById("undoBtn").onclick = () => {
   if (!paths.length) return;
   undonePaths.push(paths.pop());
   if (currentRoom) db.ref(`rooms/${currentRoom}/paths`).set(paths.length ? paths : null);
-  drawAll();
+  offDirty = true; drawAll();
 };
 document.getElementById("redoBtn").onclick = () => {
   if (!undonePaths.length) return;
   paths.push(undonePaths.pop());
   if (currentRoom) db.ref(`rooms/${currentRoom}/paths`).set(paths);
-  drawAll();
+  offDirty = true; drawAll();
 };
 document.getElementById("saveBtn").onclick = () => {
   const tmp = document.createElement("canvas");
@@ -608,7 +644,7 @@ function joinRoom(code) {
   db.ref(`rooms/${currentRoom}/paths`).on("value", snap => {
     const data = snap.val();
     paths = data ? Object.values(data) : [];
-    drawAll();
+    offDirty = true; drawAll();
   });
   notify("انضممت للغرفة: " + code);
 }
@@ -617,4 +653,3 @@ drawAll();
 </script>
 </body>
 </html>
- 
