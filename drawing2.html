@@ -5,113 +5,46 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>Luix`s Endless Drawing (Team) - متزامن</title>
   <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-      overflow: hidden;
-      touch-action: none;
-      font-family: sans-serif;
-    }
-    
+    html, body { margin: 0; padding: 0; overflow: hidden; touch-action: none; font-family: sans-serif; }
     #topBar {
-      position: fixed;
-      top: 0;
-      right: 0;
-      left: 0;
-      background: #f0f0f0;
-      padding: 8px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      z-index: 10;
-      height: 40px;
-      box-sizing: border-box;
-      border-bottom: 1px solid #ccc;
+      position: fixed; top: 0; right: 0; left: 0; background: #f0f0f0; padding: 8px;
+      display: flex; justify-content: space-between; align-items: center;
+      z-index: 10; height: 40px; box-sizing: border-box; border-bottom: 1px solid #ccc;
     }
-    
     #bottomBar {
-      position: fixed;
-      bottom: 0;
-      right: 0;
-      left: 0;
-      background: #f0f0f0;
-      padding: 8px;
-      display: flex;
-      justify-content: space-around;
-      align-items: center;
-      z-index: 10;
-      height: 50px;
-      box-sizing: border-box;
-      border-top: 1px solid #ccc;
+      position: fixed; bottom: 0; right: 0; left: 0; background: #f0f0f0; padding: 8px;
+      display: flex; justify-content: space-around; align-items: center;
+      z-index: 10; height: 50px; box-sizing: border-box; border-top: 1px solid #ccc;
     }
-    
     #dropdownMenu {
-      position: fixed;
-      bottom: 60px;
-      left: 10px;
-      background: white;
-      border-radius: 8px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-      z-index: 20;
-      display: none;
-      flex-direction: column;
-      min-width: 150px;
-      overflow: hidden;
+      position: fixed; bottom: 60px; left: 10px; background: white; border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.2); z-index: 20; display: none;
+      flex-direction: column; min-width: 150px; overflow: hidden;
     }
-    
     #dropdownMenu button {
-      border: none;
-      background: none;
-      padding: 12px;
-      text-align: right;
-      font-size: 14px;
-      border-bottom: 1px solid #eee;
-      cursor: pointer;
+      border: none; background: none; padding: 12px; text-align: right;
+      font-size: 14px; border-bottom: 1px solid #eee; cursor: pointer;
     }
-    
     #dropdownMenu button:hover { background: #f5f5f5; }
-    
     .menu-button { background: none; border: none; font-size: 20px; cursor: pointer; padding: 5px 10px; }
-    
     .tool-button {
-      background: white; border: 1px solid #ccc; border-radius: 6px;
-      padding: 6px 10px; font-size: 14px; cursor: pointer;
-      display: flex; align-items: center; justify-content: center;
-      min-width: 44px; height: 36px;
+      background: white; border: 1px solid #ccc; border-radius: 6px; padding: 6px 10px;
+      font-size: 14px; cursor: pointer; display: flex; align-items: center;
+      justify-content: center; min-width: 44px; height: 36px;
     }
-    
     .control-group { display: flex; align-items: center; gap: 8px; }
     .control-group label { font-size: 14px; white-space: nowrap; }
     #colorPicker { width: 30px; height: 30px; padding: 2px; border: 1px solid #ccc; border-radius: 4px; }
     #brushSize { width: 40px; padding: 4px; border: 1px solid #ccc; border-radius: 4px; text-align: center; }
-    
-    canvas {
-      position: absolute;
-      top: 40px;
-      left: 0;
-      width: 100%;
-      height: calc(100% - 90px);
-      background: white;
-      touch-action: none;
-    }
-    
+    canvas { position: absolute; top: 40px; left: 0; width: 100%; height: calc(100% - 90px); background: white; touch-action: none; }
     .zoom-info {
-      position: fixed;
-      bottom: 55px;
-      left: 10px;
-      background: rgba(0,0,0,0.5);
-      color: white;
-      padding: 5px 10px;
-      border-radius: 5px;
-      font-size: 12px;
-      z-index: 15;
+      position: fixed; bottom: 55px; left: 10px; background: rgba(0,0,0,0.5);
+      color: white; padding: 5px 10px; border-radius: 5px; font-size: 12px; z-index: 15;
     }
-    
     #roomControls { display: flex; flex-direction: column; gap: 8px; padding: 10px; }
     .room-status { display: flex; align-items: center; gap: 5px; margin-bottom: 8px; }
     .status-indicator { width: 10px; height: 10px; border-radius: 50%; display: inline-block; background-color: #f44336; }
-    .status-connected { background-color: #4CAF50; }
-    
+    .status-connected { background-color: #4CAF50 !important; }
     input[type="file"] { display: none; }
     .sync-notification {
       position: fixed; bottom: 100px; left: 10px; background: rgba(0,0,0,0.7);
@@ -180,21 +113,34 @@
   const db = firebase.database();
   const clientId = Math.random().toString(36).substring(2, 10);
 
-  const canvas = document.getElementById("canvas");
-  const ctx = canvas.getContext("2d");
+  const canvas      = document.getElementById("canvas");
+  const ctx         = canvas.getContext("2d");
   const colorPicker = document.getElementById("colorPicker");
-  const brushSize = document.getElementById("brushSize");
-  const zoomInfo = document.getElementById("zoomInfo");
+  const brushSize   = document.getElementById("brushSize");
+  const zoomInfo    = document.getElementById("zoomInfo");
+  const syncNote    = document.getElementById("syncNotification");
 
-  let width = window.innerWidth;
-  let height = window.innerHeight - 90;
-  canvas.width = width;
-  canvas.height = height;
+  function resizeCanvas() {
+    canvas.width  = window.innerWidth;
+    canvas.height = window.innerHeight - 90;
+  }
+  resizeCanvas();
+  window.addEventListener("resize", () => { resizeCanvas(); drawAll(); });
 
+  // ---- الحالة ----
   let paths = [], undonePaths = [], currentPath = null;
-  let drawing = false, zoom = 1, panX = 0, panY = 0;
-  let isZooming = false, lastTouchDist = 0;
+  let drawing   = false;
+  let zoom = 1, panX = 0, panY = 0;
+  let isZooming = false;
+  let lastTouchDist = 0, lastMidX = 0, lastMidY = 0;
   let currentRoom = null, currentPathId = null;
+
+  // ---- مساعدات ----
+  function notify(msg, ms = 2000) {
+    syncNote.textContent = msg;
+    syncNote.classList.add("show");
+    setTimeout(() => syncNote.classList.remove("show"), ms);
+  }
 
   function updateZoomInfo() {
     zoomInfo.textContent = `زوم: ${zoom.toFixed(2)}x`;
@@ -204,39 +150,50 @@
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.setTransform(zoom, 0, 0, zoom, panX, panY);
-
     paths.forEach(path => {
-      if (path.points.length < 2) return;
+      if (!path.points || path.points.length < 2) return;
       ctx.strokeStyle = path.color;
-      ctx.lineWidth = path.size;
-      ctx.lineCap = "round";
+      ctx.lineWidth   = path.size;
+      ctx.lineCap     = "round";
+      ctx.lineJoin    = "round";
       ctx.beginPath();
       ctx.moveTo(path.points[0].x, path.points[0].y);
-      for (let i = 1; i < path.points.length; i++) {
+      for (let i = 1; i < path.points.length; i++)
         ctx.lineTo(path.points[i].x, path.points[i].y);
-      }
       ctx.stroke();
     });
     updateZoomInfo();
   }
 
-  function getCanvasPos(e) {
+  // إحداثيات الشاشة → إحداثيات الـ canvas
+  function toCanvas(screenX, screenY) {
     const rect = canvas.getBoundingClientRect();
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     return {
-      x: (clientX - rect.left - panX) / zoom,
-      y: (clientY - rect.top - panY) / zoom
+      x: (screenX - rect.left - panX) / zoom,
+      y: (screenY - rect.top  - panY) / zoom
     };
   }
 
-  // الرسم
-  function startDrawing(e) {
-    if (isZooming) return;
+  // ---- الزوم من نقطة محددة ----
+  // pivotScreenX/Y = إحداثيات نقطة المنتصف بين الإصبعين على الشاشة
+  function applyZoom(newZoom, pivotScreenX, pivotScreenY) {
+    newZoom = Math.max(0.05, Math.min(newZoom, 100));
+    const rect = canvas.getBoundingClientRect();
+    // نقطة العالم (world point) تحت المحور قبل التغيير
+    const wx = (pivotScreenX - rect.left - panX) / zoom;
+    const wy = (pivotScreenY - rect.top  - panY) / zoom;
+    zoom = newZoom;
+    // بعد تغيير الزوم، اضبط البان بحيث تبقى نفس نقطة العالم تحت المحور
+    panX = pivotScreenX - rect.left - wx * zoom;
+    panY = pivotScreenY - rect.top  - wy * zoom;
+    drawAll();
+  }
+
+  // ---- الرسم ----
+  function startDrawing(sx, sy) {
     drawing = true;
-    const pos = getCanvasPos(e);
+    const pos = toCanvas(sx, sy);
     currentPath = { color: colorPicker.value, size: parseFloat(brushSize.value), points: [pos] };
-    
     if (currentRoom) {
       const ref = db.ref(`rooms/${currentRoom}/paths`).push();
       currentPathId = ref.key;
@@ -244,123 +201,163 @@
     }
   }
 
-  function moveDrawing(e) {
-    if (!drawing || isZooming) return;
-    const pos = getCanvasPos(e);
+  function continueDrawing(sx, sy) {
+    if (!drawing) return;
+    const pos  = toCanvas(sx, sy);
+    const last = currentPath.points[currentPath.points.length - 1];
     currentPath.points.push(pos);
-    
-    // رسم لحظي محلي للسرعة
     ctx.setTransform(zoom, 0, 0, zoom, panX, panY);
     ctx.strokeStyle = currentPath.color;
-    ctx.lineWidth = currentPath.size;
-    ctx.lineCap = "round";
-    const lastPoint = currentPath.points[currentPath.points.length - 2];
+    ctx.lineWidth   = currentPath.size;
+    ctx.lineCap     = "round";
+    ctx.lineJoin    = "round";
     ctx.beginPath();
-    ctx.moveTo(lastPoint.x, lastPoint.y);
-    ctx.lineTo(pos.x, pos.y);
+    ctx.moveTo(last.x, last.y);
+    ctx.lineTo(pos.x,  pos.y);
     ctx.stroke();
-
-    if (currentRoom && currentPathId) {
+    if (currentRoom && currentPathId)
       db.ref(`rooms/${currentRoom}/paths/${currentPathId}/points`).set(currentPath.points);
-    }
   }
 
-  function endDrawing() {
-    if (drawing) {
-      paths.push(currentPath);
-      drawing = false;
-      currentPath = null;
-    }
+  function stopDrawing() {
+    if (drawing && currentPath) { paths.push(currentPath); undonePaths = []; }
+    drawing = false; currentPath = null;
   }
 
-  // التعامل مع الغرف
+  // ---- ماوس ----
+  canvas.addEventListener("mousedown", e => startDrawing(e.clientX, e.clientY));
+  window.addEventListener("mousemove", e => { if (drawing) continueDrawing(e.clientX, e.clientY); });
+  window.addEventListener("mouseup",   stopDrawing);
+
+  // ---- لمس ----
+  canvas.addEventListener("touchstart", e => {
+    e.preventDefault();
+    if (e.touches.length === 2) {
+      stopDrawing();           // أنهِ أي رسم جارٍ
+      isZooming = true;
+      const t0 = e.touches[0], t1 = e.touches[1];
+      lastTouchDist = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
+      lastMidX = (t0.clientX + t1.clientX) / 2;
+      lastMidY = (t0.clientY + t1.clientY) / 2;
+    } else if (e.touches.length === 1 && !isZooming) {
+      startDrawing(e.touches[0].clientX, e.touches[0].clientY);
+    }
+  }, { passive: false });
+
+  canvas.addEventListener("touchmove", e => {
+    e.preventDefault();
+    if (isZooming && e.touches.length === 2) {
+      const t0 = e.touches[0], t1 = e.touches[1];
+      const newDist = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
+      const midX    = (t0.clientX + t1.clientX) / 2;
+      const midY    = (t0.clientY + t1.clientY) / 2;
+      // ← هنا الإصلاح: نمرر نقطة المنتصف كـ pivot
+      applyZoom(zoom * (newDist / lastTouchDist), midX, midY);
+      lastTouchDist = newDist;
+      lastMidX = midX; lastMidY = midY;
+    } else if (!isZooming && e.touches.length === 1) {
+      continueDrawing(e.touches[0].clientX, e.touches[0].clientY);
+    }
+  }, { passive: false });
+
+  canvas.addEventListener("touchend", e => {
+    if (e.touches.length < 2) isZooming = false;
+    if (e.touches.length === 0) stopDrawing();
+  });
+
+  // ---- أزرار ----
+  document.getElementById("menuToggle").onclick = () => {
+    const m = document.getElementById("dropdownMenu");
+    m.style.display = m.style.display === "flex" ? "none" : "flex";
+  };
+
+  document.getElementById("clearBtn").onclick = () => {
+    if (currentRoom) db.ref(`rooms/${currentRoom}/paths`).remove();
+    paths = []; undonePaths = []; drawAll();
+  };
+
+  document.getElementById("undoBtn").onclick = () => {
+    if (!paths.length) return;
+    undonePaths.push(paths.pop());
+    if (currentRoom) db.ref(`rooms/${currentRoom}/paths`).set(paths.length ? paths : null);
+    drawAll();
+  };
+
+  document.getElementById("redoBtn").onclick = () => {
+    if (!undonePaths.length) return;
+    paths.push(undonePaths.pop());
+    if (currentRoom) db.ref(`rooms/${currentRoom}/paths`).set(paths);
+    drawAll();
+  };
+
+  document.getElementById("saveBtn").onclick = () => {
+    const tmp = document.createElement("canvas");
+    tmp.width = canvas.width; tmp.height = canvas.height;
+    const tc = tmp.getContext("2d");
+    tc.fillStyle = "white"; tc.fillRect(0, 0, tmp.width, tmp.height);
+    tc.drawImage(canvas, 0, 0);
+    const a = document.createElement("a");
+    a.download = "drawing.png"; a.href = tmp.toDataURL(); a.click();
+  };
+
+  document.getElementById("saveJsonBtn").onclick = () => {
+    const blob = new Blob([JSON.stringify({ paths, zoom, panX, panY })], { type: "application/json" });
+    const a = document.createElement("a");
+    a.download = "drawing.json"; a.href = URL.createObjectURL(blob); a.click();
+  };
+
+  document.getElementById("loadJsonBtn").onclick = () =>
+    document.getElementById("jsonFileInput").click();
+
+  document.getElementById("jsonFileInput").addEventListener("change", e => {
+    const file = e.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const d = JSON.parse(ev.target.result);
+        paths = d.paths || []; zoom = d.zoom || 1; panX = d.panX || 0; panY = d.panY || 0;
+        undonePaths = []; drawAll();
+      } catch { alert("خطأ في الملف"); }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  });
+
+  // ---- الغرف ----
   document.getElementById("newRoomBtn").onclick = () => {
     const code = Math.random().toString(36).substring(2, 7).toUpperCase();
     document.getElementById("roomCodeInput").value = code;
     joinRoom(code);
   };
-
   document.getElementById("joinRoomBtn").onclick = () => {
-    const code = document.getElementById("roomCodeInput").value.trim();
-    if (code) joinRoom(code);
+    const code = document.getElementById("roomCodeInput").value.trim().toUpperCase();
+    if (code) joinRoom(code); else alert("أدخل كود الغرفة");
+  };
+  document.getElementById("leaveRoomBtn").onclick = () => {
+    if (currentRoom) { db.ref(`rooms/${currentRoom}/paths`).off(); currentRoom = null; }
+    document.getElementById("connectionStatus").classList.remove("status-connected");
+    document.getElementById("newRoomBtn").style.display = "";
+    document.getElementById("joinRoomBtn").style.display = "";
+    document.getElementById("leaveRoomBtn").style.display = "none";
+    notify("غادرت الغرفة");
   };
 
   function joinRoom(code) {
     if (currentRoom) db.ref(`rooms/${currentRoom}/paths`).off();
-    currentRoom = code;
-    paths = [];
+    currentRoom = code; paths = [];
     document.getElementById("connectionStatus").classList.add("status-connected");
-    
-    db.ref(`rooms/${currentRoom}/paths`).on('value', (snapshot) => {
-      const data = snapshot.val();
-      if (data) {
-        paths = Object.values(data);
-        drawAll();
-      } else {
-        paths = [];
-        drawAll();
-      }
+    document.getElementById("newRoomBtn").style.display = "none";
+    document.getElementById("joinRoomBtn").style.display = "none";
+    document.getElementById("leaveRoomBtn").style.display = "";
+    db.ref(`rooms/${currentRoom}/paths`).on("value", snap => {
+      const data = snap.val();
+      paths = data ? Object.values(data) : [];
+      drawAll();
     });
-    alert("انضممت للغرفة: " + code);
+    notify("انضممت للغرفة: " + code);
   }
 
-  // الأحداث
-  canvas.addEventListener("mousedown", startDrawing);
-  window.addEventListener("mousemove", moveDrawing);
-  window.addEventListener("mouseup", endDrawing);
-  
-  canvas.addEventListener("touchstart", (e) => {
-    if (e.touches.length === 2) {
-      isZooming = true;
-      lastTouchDist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
-    } else {
-      startDrawing(e);
-    }
-  });
-
-  canvas.addEventListener("touchmove", (e) => {
-    if (isZooming && e.touches.length === 2) {
-      const dist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
-      zoom *= (dist / lastTouchDist);
-      lastTouchDist = dist;
-      drawAll();
-    } else {
-      moveDrawing(e);
-    }
-  });
-
-  canvas.addEventListener("touchend", () => {
-    isZooming = false;
-    endDrawing();
-  });
-
-  document.getElementById("menuToggle").onclick = () => {
-    const menu = document.getElementById("dropdownMenu");
-    menu.style.display = menu.style.display === "flex" ? "none" : "flex";
-  };
-
-  document.getElementById("clearBtn").onclick = () => {
-    if (currentRoom) db.ref(`rooms/${currentRoom}/paths`).remove();
-    paths = [];
-    drawAll();
-  };
-
-  document.getElementById("undoBtn").onclick = () => {
-    if (paths.length > 0) {
-      undonePaths.push(paths.pop());
-      if (currentRoom) db.ref(`rooms/${currentRoom}/paths`).set(paths);
-      drawAll();
-    }
-  };
-
-  // حفظ صورة
-  document.getElementById("saveBtn").onclick = () => {
-    const link = document.createElement('a');
-    link.download = 'drawing.png';
-    link.href = canvas.toDataURL();
-    link.click();
-  };
+  drawAll();
 </script>
 </body>
-  </html>
-  
+</html>
