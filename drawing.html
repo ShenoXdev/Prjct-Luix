@@ -471,7 +471,7 @@ function toWorld(sx, sy) {
    Zoom
 ══════════════════════════════════════════ */
 function applyZoom(nz, px, py) {
-  nz = Math.max(0.05, Math.min(nz, 100));
+  nz = Math.max(0.0000000000000000000000001, Math.min(nz, 100));
   const r  = eventCanvas.getBoundingClientRect();
   const wx = (px - r.left - panX) / zoom;
   const wy = (py - r.top  - panY) / zoom;
