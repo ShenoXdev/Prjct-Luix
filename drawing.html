@@ -3,11 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Luix's Endless Drawing</title>
+  <title>Luix`s Endless Drawing</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; }
-    html, body { margin: 0; padding: 0; overflow: hidden; touch-action: none; font-family: sans-serif; background: #fff; }
+    html, body { margin: 0; padding: 0; overflow: hidden; touch-action: none; font-family: sans-serif; }
 
+    /* ── شريط علوي ── */
     #topBar {
       position: fixed; top: 0; right: 0; left: 0; background: #f0f0f0;
       padding: 0 10px; display: flex; justify-content: space-between; align-items: center;
@@ -18,6 +19,7 @@
     #colorPicker { width: 30px; height: 30px; padding: 2px; border: 1px solid #ccc; border-radius: 4px; cursor: pointer; }
     #brushSize   { width: 42px; padding: 4px; border: 1px solid #ccc; border-radius: 4px; text-align: center; }
 
+    /* ── شريط سفلي ── */
     #bottomBar {
       position: fixed; bottom: 0; right: 0; left: 0; background: #f0f0f0;
       padding: 0 10px; display: flex; justify-content: space-around; align-items: center;
@@ -30,49 +32,64 @@
       min-width: 44px; height: 38px; transition: background .15s;
     }
     .tool-button:hover { background: #e8e8e8; }
+    .tool-button.active { background: #d0e8ff; border-color: #4a9eff; }
 
-    /* WebGL canvas يغطي المنطقة بين الشريطين */
-    #glCanvas {
+    /* canvas */
+    canvas {
       position: absolute; top: 44px; left: 0;
       width: 100%; height: calc(100% - 96px);
-      touch-action: none; display: block;
-    }
-    /* Canvas 2D فوقه للرسم اللحظي فقط */
-    #drawCanvas {
-      position: absolute; top: 44px; left: 0;
-      width: 100%; height: calc(100% - 96px);
-      touch-action: none; pointer-events: none;
-    }
-    /* الـ canvas الفعلي لالتقاط الأحداث */
-    #eventCanvas {
-      position: absolute; top: 44px; left: 0;
-      width: 100%; height: calc(100% - 96px);
-      touch-action: none; background: transparent;
+      background: white; touch-action: none;
     }
 
+    /* ── زوم ── */
     .zoom-info {
       position: fixed; bottom: 57px; left: 10px;
       background: rgba(0,0,0,0.45); color: white;
       padding: 4px 9px; border-radius: 5px; font-size: 12px; z-index: 15;
     }
 
-    /* Tools menu */
+    /* ═══════════════════════════════════════
+       قائمة الأدوات (تُفتح من زر اللوحة)
+    ═══════════════════════════════════════ */
     #toolsMenu {
-      position: fixed; bottom: 60px; right: 10px; background: white; border-radius: 14px;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.18); z-index: 30; display: none;
-      flex-direction: column; min-width: 200px; overflow: hidden;
+      position: fixed; bottom: 60px; right: 10px;
+      background: white; border-radius: 14px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.18);
+      z-index: 30; display: none; flex-direction: column;
+      min-width: 200px; overflow: hidden;
+      animation: fadeUp .15s ease;
     }
-    .menu-section-title { font-size: 11px; color: #888; padding: 10px 14px 4px; letter-spacing: .5px; }
-    #quickColors { display: flex; flex-wrap: wrap; gap: 7px; padding: 6px 14px 10px; }
-    .qcolor { width: 26px; height: 26px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; transition: transform .1s; }
+    @keyframes fadeUp { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+
+    /* عنوان القسم */
+    .menu-section-title {
+      font-size: 11px; color: #888; padding: 10px 14px 4px;
+      text-transform: uppercase; letter-spacing: .5px;
+    }
+
+    /* صف الألوان السريعة */
+    #quickColors {
+      display: flex; flex-wrap: wrap; gap: 7px; padding: 6px 14px 10px;
+    }
+    .qcolor {
+      width: 26px; height: 26px; border-radius: 50%;
+      border: 2px solid transparent; cursor: pointer; transition: transform .1s;
+    }
     .qcolor:hover { transform: scale(1.15); }
     .qcolor.selected { border-color: #333; }
+
+    /* فاصل */
     .menu-divider { height: 1px; background: #eee; margin: 2px 0; }
+
+    /* أدوات الرسم */
+    #drawToolsList { display: flex; flex-direction: column; }
     .draw-tool-btn {
       display: flex; align-items: center; gap: 10px;
       border: none; background: none; padding: 11px 14px;
-      font-size: 14px; cursor: pointer; border-bottom: 1px solid #f0f0f0;
+      text-align: right; font-size: 14px; cursor: pointer;
+      border-bottom: 1px solid #f0f0f0; transition: background .12s;
     }
+    .draw-tool-btn:last-child { border-bottom: none; }
     .draw-tool-btn:hover { background: #f5f5f5; }
     .draw-tool-btn.active { background: #e8f2ff; }
     .draw-tool-btn .tool-icon { font-size: 20px; width: 28px; text-align: center; }
@@ -80,7 +97,9 @@
     .draw-tool-btn .tool-check { color: #4a9eff; font-size: 16px; opacity: 0; }
     .draw-tool-btn.active .tool-check { opacity: 1; }
 
-    /* Dropdown */
+    /* ═══════════════════════════════
+       قائمة الـ ⋯  (حفظ / غرف)
+    ═══════════════════════════════ */
     #dropdownMenu {
       position: fixed; bottom: 60px; left: 10px; background: white; border-radius: 12px;
       box-shadow: 0 4px 20px rgba(0,0,0,0.18); z-index: 30; display: none;
@@ -91,14 +110,23 @@
       font-size: 14px; border-bottom: 1px solid #eee; cursor: pointer;
     }
     #dropdownMenu > button:hover { background: #f5f5f5; }
+
+    /* ── غرف ── */
     #roomControls { display: flex; flex-direction: column; gap: 7px; padding: 10px 14px; }
     .room-status  { display: flex; align-items: center; gap: 6px; font-size: 13px; }
-    .status-indicator { width: 10px; height: 10px; border-radius: 50%; background: #f44336; flex-shrink: 0; }
+    .status-indicator { width: 10px; height: 10px; border-radius: 50%; background: #f44336; flex-shrink:0; }
     .status-connected { background: #4CAF50 !important; }
-    #roomCodeInput { padding: 6px 8px; border: 1px solid #ccc; border-radius: 6px; font-size: 13px; width: 100%; }
-    .room-btn { padding: 8px; border: 1px solid #ccc; border-radius: 6px; background: white; cursor: pointer; font-size: 13px; text-align: center; }
+    #roomCodeInput {
+      padding: 6px 8px; border: 1px solid #ccc; border-radius: 6px;
+      font-size: 13px; width: 100%;
+    }
+    .room-btn {
+      padding: 8px; border: 1px solid #ccc; border-radius: 6px;
+      background: white; cursor: pointer; font-size: 13px; text-align: center;
+    }
     .room-btn:hover { background: #f5f5f5; }
 
+    /* notify */
     input[type="file"] { display: none; }
     .sync-notification {
       position: fixed; bottom: 104px; left: 10px; background: rgba(0,0,0,0.7);
@@ -106,10 +134,18 @@
       opacity: 0; transition: opacity .3s; pointer-events: none; z-index: 40;
     }
     .sync-notification.show { opacity: 1; }
+
+    /* زر اللوحة في الشريط السفلي */
+    #paletteBtn { position: relative; }
+    #paletteBtn img { width: 26px; height: 26px; }
+
+    /* cursor للقلم الرصاص */
+    canvas.pencil-cursor { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20'%3E%3Cpath d='M14.5 1.5l4 4-11 11H3.5v-4z' fill='%23555' stroke='%23222' stroke-width='1'/%3E%3C/svg%3E") 0 20, crosshair; }
   </style>
 </head>
 <body>
 
+<!-- ── شريط علوي ── -->
 <div id="topBar">
   <div class="control-group">
     <label for="colorPicker">🎨</label>
@@ -122,38 +158,33 @@
   <button id="menuToggle" class="tool-button" style="border:none;background:none;font-size:20px;">⋯</button>
 </div>
 
+<!-- ── شريط سفلي ── -->
 <div id="bottomBar">
   <button id="undoBtn"  class="tool-button">↩️</button>
   <button id="redoBtn"  class="tool-button">↪️</button>
   <button id="clearBtn" class="tool-button">🧹</button>
   <button id="saveBtn"  class="tool-button">💾</button>
+  <!-- زر اللوحة — يفتح قائمة الأدوات -->
   <button id="paletteBtn" class="tool-button">
-    <svg viewBox="0 0 100 100" width="28" height="28" xmlns="http://www.w3.org/2000/svg">
+    <svg id="paletteIcon" viewBox="0 0 100 100" width="28" height="28" xmlns="http://www.w3.org/2000/svg">
+      <!-- جسم اللوحة -->
       <ellipse cx="46" cy="54" rx="38" ry="34" fill="#7a5c4e" stroke="#4a3328" stroke-width="3"/>
+      <!-- الفتحة الكبيرة للإبهام -->
       <ellipse cx="62" cy="34" rx="9" ry="10" fill="white"/>
+      <!-- نقاط الألوان -->
       <circle cx="30" cy="42" r="7" fill="#b07fd0"/>
       <circle cx="26" cy="58" r="7" fill="#7ab8e8"/>
       <circle cx="35" cy="70" r="7" fill="#7dcf8a"/>
       <circle cx="51" cy="74" r="7" fill="#f0e06a"/>
       <circle cx="46" cy="40" r="6" fill="#f07a6a"/>
+      <!-- الفرشاة -->
       <rect x="68" y="28" width="6" height="28" rx="3" fill="#c8a46a" transform="rotate(20,71,42)"/>
       <ellipse cx="80" cy="26" rx="5" ry="9" fill="#8b5e3c" transform="rotate(20,80,30)"/>
     </svg>
   </button>
 </div>
 
-<!-- WebGL layer (committed strokes) -->
-<canvas id="glCanvas"></canvas>
-<!-- 2D layer (live stroke while drawing) -->
-<canvas id="drawCanvas"></canvas>
-<!-- Event capture layer -->
-<canvas id="eventCanvas"></canvas>
-
-<div class="zoom-info" id="zoomInfo">زوم: 1x</div>
-<div class="sync-notification" id="syncNotification"></div>
-<input type="file" id="jsonFileInput" accept=".json">
-
-<!-- Tools menu -->
+<!-- ══ قائمة الأدوات ══ -->
 <div id="toolsMenu">
   <div class="menu-section-title">الألوان السريعة</div>
   <div id="quickColors"></div>
@@ -167,10 +198,14 @@
     </button>
     <button class="draw-tool-btn" data-tool="pencil">
       <span class="tool-icon">
+        <!-- SVG قلم رصاص مخصص -->
         <svg viewBox="0 0 24 24" width="22" height="22" xmlns="http://www.w3.org/2000/svg">
           <polygon points="3,17 2,22 7,21" fill="#555"/>
-          <rect x="4.5" y="4" width="5" height="14" rx="1" transform="rotate(-45 7 11)" fill="#f5c842" stroke="#c8a000" stroke-width=".8"/>
-          <rect x="4.5" y="4" width="5" height="4" rx="1" transform="rotate(-45 7 11)" fill="#e8a87c" stroke="#c87040" stroke-width=".8"/>
+          <rect x="4.5" y="4" width="5" height="14" rx="1"
+                transform="rotate(-45 7 11)" fill="#f5c842" stroke="#c8a000" stroke-width=".8"/>
+          <rect x="4.5" y="4" width="5" height="4" rx="1"
+                transform="rotate(-45 7 11)" fill="#e8a87c" stroke="#c87040" stroke-width=".8"/>
+          <line x1="3" y1="17" x2="7" y2="21" stroke="#888" stroke-width="1"/>
         </svg>
       </span>
       <span class="tool-label">قلم رصاص</span>
@@ -179,7 +214,7 @@
   </div>
 </div>
 
-<!-- Dropdown -->
+<!-- ══ قائمة ⋯ ══ -->
 <div id="dropdownMenu">
   <button id="saveJsonBtn">💾 حفظ JSON</button>
   <button id="loadJsonBtn">📂 فتح JSON</button>
@@ -195,12 +230,15 @@
   </div>
 </div>
 
+<canvas id="canvas"></canvas>
+<div class="zoom-info" id="zoomInfo">زوم: 1x</div>
+<div class="sync-notification" id="syncNotification"></div>
+<input type="file" id="jsonFileInput" accept=".json">
+
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 <script>
-/* ══════════════════════════════════════════
-   Firebase
-══════════════════════════════════════════ */
+/* ═══════════ Firebase ═══════════ */
 const firebaseConfig = {
   apiKey: "AIzaSyC6PieefR4_qJwC6NXdJNN16GNyBu7UQOw",
   authDomain: "endless-drawing.firebaseapp.com",
@@ -214,282 +252,248 @@ firebase.initializeApp(firebaseConfig);
 const db       = firebase.database();
 const clientId = Math.random().toString(36).substring(2, 10);
 
-/* ══════════════════════════════════════════
-   Canvases
-══════════════════════════════════════════ */
-const glCanvas    = document.getElementById("glCanvas");
-const drawCanvas  = document.getElementById("drawCanvas");
-const eventCanvas = document.getElementById("eventCanvas");
-const dctx        = drawCanvas.getContext("2d");   // للرسم اللحظي فقط
-
+/* ═══════════ Canvas setup ═══════════ */
+const canvas      = document.getElementById("canvas");
+const ctx         = canvas.getContext("2d");
 const colorPicker = document.getElementById("colorPicker");
-const brushSizeEl = document.getElementById("brushSize");
-const zoomInfoEl  = document.getElementById("zoomInfo");
+const brushSize   = document.getElementById("brushSize");
+const zoomInfo    = document.getElementById("zoomInfo");
 const syncNote    = document.getElementById("syncNotification");
 
-function resizeAll() {
-  const W = window.innerWidth;
-  const H = window.innerHeight - 96;
-  [glCanvas, drawCanvas, eventCanvas].forEach(c => { c.width = W; c.height = H; });
-  initWebGL();
-  redrawAll();
+function resizeCanvas() {
+  canvas.width  = window.innerWidth;
+  canvas.height = window.innerHeight - 96;
 }
-window.addEventListener("resize", resizeAll);
+resizeCanvas();
+window.addEventListener("resize", () => { resizeCanvas(); offDirty = true; drawAll(); });
 
-/* ══════════════════════════════════════════
-   WebGL setup
-══════════════════════════════════════════ */
-let gl, prog, posLoc, colorLoc, pointSizeLoc;
-let glBatches = []; // { buf, count, r,g,b,a, size, type:'points'|'lines' }
+/* ═══════════ State ═══════════ */
+let paths = [], undonePaths = [], currentPath = null;
+let drawing = false;
+let zoom = 1, panX = 0, panY = 0;
+let isZooming = false, lastTouchDist = 0;
+let currentRoom = null, currentPathId = null;
+let currentTool = "brush"; // "brush" | "pencil"
 
-const VS = `
-  attribute vec2 a_pos;
-  uniform vec2 u_resolution;
-  uniform vec2 u_pan;
-  uniform float u_zoom;
-  uniform float u_pointSize;
-  void main() {
-    vec2 world = a_pos * u_zoom + u_pan;
-    vec2 clip  = (world / u_resolution) * 2.0 - 1.0;
-    gl_Position  = vec4(clip.x, -clip.y, 0, 1);
-    gl_PointSize = u_pointSize;
-  }
-`;
-const FS = `
-  precision mediump float;
-  uniform vec4 u_color;
-  void main() { gl_FragColor = u_color; }
-`;
+/* ═══════════ Colours palette ═══════════ */
+const QUICK_COLORS = [
+  "#000000","#ffffff","#ef4444","#f97316","#eab308",
+  "#22c55e","#3b82f6","#8b5cf6","#ec4899","#6b7280",
+  "#78350f","#0ea5e9"
+];
+const qcContainer = document.getElementById("quickColors");
+QUICK_COLORS.forEach(c => {
+  const btn = document.createElement("button");
+  btn.className = "qcolor";
+  btn.style.background = c;
+  btn.title = c;
+  if (c === colorPicker.value) btn.classList.add("selected");
+  btn.onclick = () => {
+    colorPicker.value = c;
+    document.querySelectorAll(".qcolor").forEach(b => b.classList.remove("selected"));
+    btn.classList.add("selected");
+  };
+  qcContainer.appendChild(btn);
+});
+colorPicker.addEventListener("input", () => {
+  document.querySelectorAll(".qcolor").forEach(b => b.classList.remove("selected"));
+});
 
-function initWebGL() {
-  gl = glCanvas.getContext("webgl", { antialias: true, preserveDrawingBuffer: true });
-  if (!gl) return;
-  gl.viewport(0, 0, glCanvas.width, glCanvas.height);
-  gl.clearColor(1, 1, 1, 1);
-  gl.enable(gl.BLEND);
-  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-
-  const vs = gl.createShader(gl.VERTEX_SHADER);
-  gl.shaderSource(vs, VS); gl.compileShader(vs);
-  const fs = gl.createShader(gl.FRAGMENT_SHADER);
-  gl.shaderSource(fs, FS); gl.compileShader(fs);
-
-  prog = gl.createProgram();
-  gl.attachShader(prog, vs); gl.attachShader(prog, fs);
-  gl.linkProgram(prog); gl.useProgram(prog);
-
-  posLoc       = gl.getAttribLocation(prog,  "a_pos");
-  colorLoc     = gl.getUniformLocation(prog, "u_color");
-  pointSizeLoc = gl.getUniformLocation(prog, "u_pointSize");
-
-  gl.uniform2f(gl.getUniformLocation(prog, "u_resolution"), glCanvas.width, glCanvas.height);
+/* ═══════════ Helpers ═══════════ */
+function notify(msg, ms = 2000) {
+  syncNote.textContent = msg;
+  syncNote.classList.add("show");
+  setTimeout(() => syncNote.classList.remove("show"), ms);
+}
+function updateZoomInfo() {
+  zoomInfo.textContent = `زوم: ${zoom.toFixed(2)}x`;
 }
 
-function glSetTransform() {
-  gl.uniform2f(gl.getUniformLocation(prog, "u_pan"),  panX, panY);
-  gl.uniform1f(gl.getUniformLocation(prog, "u_zoom"), zoom);
-  gl.uniform2f(gl.getUniformLocation(prog, "u_resolution"), glCanvas.width, glCanvas.height);
-}
-
-/* يحوّل path لـ WebGL buffer ويضيفه لـ glBatches */
-function pathToGL(path) {
-  if (!path.points || path.points.length < 2) return;
-  const col   = hexToRgb(path.color);
-  const size  = path.size;
-
-  if (path.tool === "pencil") {
-    // الأشكال مخزنة في path.grains
-    if (!path.grains) generateGrains(path);
-    const grains = path.grains;
-    const verts  = new Float32Array(grains.length * 2);
-    const sizes  = [];
-    const alphas = [];
-    for (let i = 0; i < grains.length; i++) {
-      verts[i*2]   = grains[i].x;
-      verts[i*2+1] = grains[i].y;
-      sizes.push(grains[i].rad * 2);
-      alphas.push(grains[i].a);
-    }
-    // كل grain بـ alpha وsize مختلف — نرسمهم في groups
-    // لتبسيط: نرسم كل grain كـ gl.POINTS call منفصل في batch
-    // أسرع: نرسم chunks بنفس الـ alpha تقريباً
-    const buf = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-    gl.bufferData(gl.ARRAY_BUFFER, verts, gl.STATIC_DRAW);
-    glBatches.push({ buf, count: grains.length, r: col.r, g: col.g, b: col.b,
-                     alphas, sizes, type: "pencil_points" });
-  } else {
-    // Brush — line strip
-    const verts = new Float32Array(path.points.length * 2);
-    for (let i = 0; i < path.points.length; i++) {
-      verts[i*2]   = path.points[i].x;
-      verts[i*2+1] = path.points[i].y;
-    }
-    const buf = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-    gl.bufferData(gl.ARRAY_BUFFER, verts, gl.STATIC_DRAW);
-    glBatches.push({ buf, count: path.points.length, r: col.r, g: col.g, b: col.b,
-                     a: 1.0, lineWidth: size, type: "brush" });
-  }
-}
-
-function redrawAll() {
-  if (!gl) return;
-  glSetTransform();
-  gl.clear(gl.COLOR_BUFFER_BIT);
-
-  for (const batch of glBatches) {
-    gl.bindBuffer(gl.ARRAY_BUFFER, batch.buf);
-    gl.enableVertexAttribArray(posLoc);
-    gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
-
-    if (batch.type === "pencil_points") {
-      // رسم النقط بـ gl.POINTS — كل نقطة بـ alpha وsize خاص
-      // نجمع النقط بنفس التقريب لتقليل draw calls
-      const grains = batch.alphas;
-      for (let i = 0; i < batch.count; i++) {
-        gl.uniform4f(colorLoc, batch.r, batch.g, batch.b, batch.alphas[i]);
-        gl.uniform1f(pointSizeLoc, Math.max(1, batch.sizes[i] * zoom));
-        gl.drawArrays(gl.POINTS, i, 1);
-      }
-    } else {
-      // Brush — نستخدم 2D canvas لأن WebGL مش بيدعم lineWidth > 1 بشكل محترم
-      gl.uniform4f(colorLoc, batch.r, batch.g, batch.b, batch.a);
-      gl.uniform1f(pointSizeLoc, 1);
-      gl.drawArrays(gl.LINE_STRIP, 0, batch.count);
-    }
-  }
-  updateZoomInfo();
-}
-
-/* ══════════════════════════════════════════
-   Pencil grains generation (مرة واحدة بس)
-══════════════════════════════════════════ */
+/* ═══════════ Pencil texture ═══════════ */
+/* يولد الأشكال العشوائية ويخزنها في path.grains */
 function generateGrains(path) {
   path.grains = [];
-  const pts     = path.points;
-  const size    = path.size;
-  const spread  = size * 0.7;
+  const pts    = path.points;
+  const size   = path.size;
+  const spread = size * 0.7;
   const baseRad = 0.12 + size * 0.04;
   for (let i = 1; i < pts.length; i++) {
     const dx  = pts[i].x - pts[i-1].x;
     const dy  = pts[i].y - pts[i-1].y;
     const len = Math.sqrt(dx*dx + dy*dy);
     if (len === 0) continue;
-    const count = Math.max(4, Math.floor(len / 0.8) * size * 0.5);
+    const count = Math.max(10, Math.floor(len / 0.3) * size * 0.4);
     for (let j = 0; j < count; j++) {
-      const t  = Math.random();
-      const ox = (Math.random() - 0.5) * 2 * spread;
-      const oy = (Math.random() - 0.5) * 2 * spread;
+      const t   = Math.random();
+      const ox  = (Math.random() - 0.5) * 2 * spread;
+      const oy  = (Math.random() - 0.5) * 2 * spread;
+      const rad = baseRad * (0.3 + Math.random() * 1.0);
       path.grains.push({
-        x:   pts[i-1].x + dx * t + ox,
-        y:   pts[i-1].y + dy * t + oy,
-        rad: baseRad * (0.4 + Math.random() * 0.9),
-        a:   0.25 + Math.random() * 0.55
+        x:    pts[i-1].x + dx * t + ox,
+        y:    pts[i-1].y + dy * t + oy,
+        rad,
+        a:    0.18 + Math.random() * 0.52,
+        rot:  Math.random() * Math.PI * 2,
+        type: Math.floor(Math.random() * 3),
+        rw:   1.5 + Math.random() * 2   // نسبة العرض للمستطيل
       });
     }
   }
 }
 
-/* ══════════════════════════════════════════
-   2D Canvas — رسم لحظي (أثناء السحب فقط)
-══════════════════════════════════════════ */
-function clearLiveCanvas() {
-  dctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+/* يرسم الأشكال المخزنة */
+function drawPencilGrains(c, path) {
+  if (!path.grains || path.grains.length === 0) return;
+  const col = path.color;
+  const r   = parseInt(col.slice(1,3),16);
+  const g   = parseInt(col.slice(3,5),16);
+  const b   = parseInt(col.slice(5,7),16);
+  c.save();
+  for (const gr of path.grains) {
+    c.save();
+    c.translate(gr.x, gr.y);
+    c.rotate(gr.rot);
+    c.fillStyle = `rgba(${r},${g},${b},${gr.a.toFixed(2)})`;
+    c.beginPath();
+    if (gr.type === 0) {
+      const w = gr.rad * gr.rw, h = gr.rad * 0.4;
+      c.rect(-w/2, -h/2, w, h);
+    } else if (gr.type === 1) {
+      c.moveTo(0, -gr.rad);
+      c.lineTo(gr.rad * 0.7,  gr.rad * 0.6);
+      c.lineTo(-gr.rad * 0.7, gr.rad * 0.4);
+      c.closePath();
+    } else {
+      c.ellipse(0, 0, gr.rad * gr.rw, gr.rad * 0.35, 0, 0, Math.PI * 2);
+    }
+    c.fill();
+    c.restore();
+  }
+  c.restore();
 }
 
-function drawLiveSegment(x1, y1, x2, y2) {
-  dctx.setTransform(zoom, 0, 0, zoom, panX, panY);
-  if (currentTool === "pencil") {
-    const col     = colorPicker.value;
-    const size    = parseFloat(brushSizeEl.value);
-    const spread  = size * 0.7;
-    const baseRad = 0.12 + size * 0.04;
-    const dx      = x2 - x1, dy = y2 - y1;
-    const len     = Math.sqrt(dx*dx + dy*dy);
-    const count   = Math.max(4, Math.floor(len / 0.8) * size * 0.5);
-    const rgb     = hexToRgb(col);
-    for (let j = 0; j < count; j++) {
-      const t   = Math.random();
-      const ox  = (Math.random() - 0.5) * 2 * spread;
-      const oy  = (Math.random() - 0.5) * 2 * spread;
-      const rad = baseRad * (0.4 + Math.random() * 0.9);
-      const a   = 0.25 + Math.random() * 0.55;
-      dctx.beginPath();
-      dctx.arc(x1 + dx*t + ox, y1 + dy*t + oy, rad, 0, Math.PI*2);
-      dctx.fillStyle = `rgba(${Math.round(rgb.r*255)},${Math.round(rgb.g*255)},${Math.round(rgb.b*255)},${a.toFixed(2)})`;
-      dctx.fill();
-    }
-  } else {
-    const size = parseFloat(brushSizeEl.value);
-    const col  = colorPicker.value;
-    dctx.strokeStyle = col;
-    dctx.lineWidth   = size;
-    dctx.lineCap     = "round";
-    dctx.lineJoin    = "round";
-    dctx.beginPath();
-    dctx.moveTo(x1, y1);
-    dctx.lineTo(x2, y2);
-    dctx.stroke();
+/* يرسم segment واحد لحظياً أثناء الرسم (بدون تخزين) */
+function drawPencilSegment(c, x1, y1, x2, y2, size, color) {
+  const dx  = x2 - x1, dy = y2 - y1;
+  const len = Math.sqrt(dx*dx + dy*dy);
+  if (len === 0) return;
+  const r = parseInt(color.slice(1,3),16);
+  const g = parseInt(color.slice(3,5),16);
+  const b = parseInt(color.slice(5,7),16);
+  const spread  = size * 0.7;
+  const baseRad = 0.12 + size * 0.04;
+  const count   = Math.max(10, Math.floor(len / 0.3) * size * 0.4);
+  c.save();
+  for (let j = 0; j < count; j++) {
+    const t   = Math.random();
+    const ox  = (Math.random() - 0.5) * 2 * spread;
+    const oy  = (Math.random() - 0.5) * 2 * spread;
+    const rad = baseRad * (0.3 + Math.random() * 1.0);
+    const a   = 0.18 + Math.random() * 0.52;
+    const rot = Math.random() * Math.PI * 2;
+    const tp  = Math.floor(Math.random() * 3);
+    const rw  = 1.5 + Math.random() * 2;
+    c.save();
+    c.translate(x1 + dx*t + ox, y1 + dy*t + oy);
+    c.rotate(rot);
+    c.fillStyle = `rgba(${r},${g},${b},${a.toFixed(2)})`;
+    c.beginPath();
+    if (tp === 0) { c.rect(-rad*rw/2, -rad*0.2, rad*rw, rad*0.4); }
+    else if (tp === 1) { c.moveTo(0,-rad); c.lineTo(rad*0.7,rad*0.6); c.lineTo(-rad*0.7,rad*0.4); c.closePath(); }
+    else { c.ellipse(0, 0, rad*rw, rad*0.35, 0, 0, Math.PI*2); }
+    c.fill();
+    c.restore();
+  }
+  c.restore();
+}
+
+/* ═══════════ Offscreen canvas — يخزن الرسم الثابت ═══════════ */
+const offscreen    = document.createElement("canvas");
+const offCtx       = offscreen.getContext("2d");
+let   offDirty     = false; // محتاج نعيد بناء الـ offscreen؟
+
+function syncOffscreenSize() {
+  if (offscreen.width !== canvas.width || offscreen.height !== canvas.height) {
+    offscreen.width  = canvas.width;
+    offscreen.height = canvas.height;
+    offDirty = true;
   }
 }
 
-/* ══════════════════════════════════════════
-   State
-══════════════════════════════════════════ */
-let paths = [], undonePaths = [], currentPath = null;
-let drawing = false;
-let zoom = 1, panX = 0, panY = 0;
-let isZooming = false, lastTouchDist = 0;
-let currentRoom = null, currentPathId = null;
-let currentTool = "brush";
-
-function hexToRgb(hex) {
-  return {
-    r: parseInt(hex.slice(1,3),16)/255,
-    g: parseInt(hex.slice(3,5),16)/255,
-    b: parseInt(hex.slice(5,7),16)/255
-  };
+/* يرسم path واحد على أي context بدون transform (إحداثيات عالم) */
+function drawPathRaw(c, path) {
+  if (!path.points || path.points.length < 2) return;
+  c.save();
+  if (path.tool === "pencil") {
+    if (!path.grains) generateGrains(path); // أنشئ الأشكال لو مش موجودة
+    drawPencilGrains(c, path);
+  } else {
+    c.globalAlpha = 1;
+    c.lineWidth   = path.size;
+    c.strokeStyle = path.color;
+    c.lineCap     = "round";
+    c.lineJoin    = "round";
+    c.setLineDash([]);
+    c.beginPath();
+    c.moveTo(path.points[0].x, path.points[0].y);
+    for (let i = 1; i < path.points.length; i++)
+      c.lineTo(path.points[i].x, path.points[i].y);
+    c.stroke();
+  }
+  c.restore();
 }
 
-function notify(msg, ms = 2000) {
-  syncNote.textContent = msg;
-  syncNote.classList.add("show");
-  setTimeout(() => syncNote.classList.remove("show"), ms);
+/* يبني الـ offscreen من الصفر بكل الـ paths */
+function rebuildOffscreen() {
+  syncOffscreenSize();
+  offCtx.setTransform(1, 0, 0, 1, 0, 0);
+  offCtx.clearRect(0, 0, offscreen.width, offscreen.height);
+  offCtx.setTransform(zoom, 0, 0, zoom, panX, panY);
+  paths.forEach(p => drawPathRaw(offCtx, p));
+  offDirty = false;
 }
 
-function updateZoomInfo() {
-  zoomInfoEl.textContent = `زوم: ${zoom.toFixed(2)}x`;
+/* يضيف path جديد على الـ offscreen بدون إعادة رسم الكل */
+function stampPathToOffscreen(path) {
+  syncOffscreenSize();
+  offCtx.setTransform(zoom, 0, 0, zoom, panX, panY);
+  drawPathRaw(offCtx, path);
 }
 
-function toWorld(sx, sy) {
-  const r = eventCanvas.getBoundingClientRect();
+function drawAll() {
+  syncOffscreenSize();
+  if (offDirty) rebuildOffscreen();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(offscreen, 0, 0);
+  updateZoomInfo();
+}
+
+function toCanvas(sx, sy) {
+  const r = canvas.getBoundingClientRect();
   return { x: (sx - r.left - panX) / zoom, y: (sy - r.top - panY) / zoom };
 }
 
-/* ══════════════════════════════════════════
-   Zoom
-══════════════════════════════════════════ */
+/* ═══════════ Zoom ═══════════ */
 function applyZoom(nz, px, py) {
-  nz = Math.max(0.0000000000000000000000001, Math.min(nz, 100));
-  const r  = eventCanvas.getBoundingClientRect();
+  nz = Math.max(0.05, Math.min(nz, 100));
+  const r  = canvas.getBoundingClientRect();
   const wx = (px - r.left - panX) / zoom;
   const wy = (py - r.top  - panY) / zoom;
   zoom = nz;
   panX = px - r.left - wx * zoom;
   panY = py - r.top  - wy * zoom;
-  redrawAll();
+  offDirty = true; // التحويل اتغير — أعد بناء الـ offscreen
+  drawAll();
 }
 
-/* ══════════════════════════════════════════
-   Drawing
-══════════════════════════════════════════ */
+/* ═══════════ Drawing events ═══════════ */
 function startDrawing(sx, sy) {
   drawing = true;
-  const pos = toWorld(sx, sy);
+  const pos = toCanvas(sx, sy);
   currentPath = {
     color: colorPicker.value,
-    size:  parseFloat(brushSizeEl.value),
+    size:  parseFloat(brushSize.value),
     tool:  currentTool,
     points:[pos],
     t:     Date.now()
@@ -497,47 +501,54 @@ function startDrawing(sx, sy) {
   if (currentRoom) {
     const ref = db.ref(`rooms/${currentRoom}/paths`).push();
     currentPathId = ref.key;
-    ref.set({ color: currentPath.color, size: currentPath.size,
-               tool: currentPath.tool, points: currentPath.points });
+    ref.set(currentPath);
   }
 }
 
 function continueDrawing(sx, sy) {
   if (!drawing) return;
-  const pos  = toWorld(sx, sy);
+  const pos  = toCanvas(sx, sy);
   const last = currentPath.points[currentPath.points.length - 1];
   currentPath.points.push(pos);
-  drawLiveSegment(last.x, last.y, pos.x, pos.y);
+  ctx.setTransform(zoom, 0, 0, zoom, panX, panY);
+  if (currentTool === "pencil") {
+    drawPencilSegment(ctx, last.x, last.y, pos.x, pos.y, currentPath.size, currentPath.color);
+  } else {
+    ctx.strokeStyle = currentPath.color;
+    ctx.lineWidth   = currentPath.size;
+    ctx.lineCap = "round"; ctx.lineJoin = "round";
+    ctx.setLineDash([]);
+    ctx.beginPath(); ctx.moveTo(last.x, last.y); ctx.lineTo(pos.x, pos.y); ctx.stroke();
+  }
   if (currentRoom && currentPathId)
     db.ref(`rooms/${currentRoom}/paths/${currentPathId}/points`).set(currentPath.points);
 }
 
 function stopDrawing() {
-  if (drawing && currentPath && currentPath.points.length > 1) {
-    if (currentPath.tool === "pencil") generateGrains(currentPath);
+  if (drawing && currentPath) {
+    if (currentPath.tool === "pencil") generateGrains(currentPath); // خزن الأشكال نهائياً
     paths.push(currentPath);
     undonePaths = [];
-    pathToGL(currentPath);   // رفع لـ WebGL buffer
-    clearLiveCanvas();
-    redrawAll();
+    stampPathToOffscreen(currentPath);
   }
   drawing = false; currentPath = null;
 }
 
-/* ══════════════════════════════════════════
-   Events
-══════════════════════════════════════════ */
-eventCanvas.addEventListener("mousedown", e => startDrawing(e.clientX, e.clientY));
-window.addEventListener("mousemove",      e => { if (drawing) continueDrawing(e.clientX, e.clientY); });
-window.addEventListener("mouseup",        stopDrawing);
+/* ── ماوس ── */
+canvas.addEventListener("mousedown", e => startDrawing(e.clientX, e.clientY));
+window.addEventListener("mousemove", e => { if (drawing) continueDrawing(e.clientX, e.clientY); });
+window.addEventListener("mouseup",   stopDrawing);
 
-eventCanvas.addEventListener("touchstart", e => {
+/* ── لمس ── */
+canvas.addEventListener("touchstart", e => {
   e.preventDefault();
   if (e.touches.length === 2) {
-    stopDrawing(); isZooming = true;
+    stopDrawing();
+    isZooming = true;
+    // ← 0.4 ثانية بدل 0.7
     const cutoff = Date.now() - 400;
     paths = paths.filter(p => !p.t || p.t < cutoff);
-    rebuildGL();
+    drawAll();
     const t0 = e.touches[0], t1 = e.touches[1];
     lastTouchDist = Math.hypot(t1.clientX-t0.clientX, t1.clientY-t0.clientY);
   } else if (e.touches.length === 1 && !isZooming) {
@@ -545,7 +556,7 @@ eventCanvas.addEventListener("touchstart", e => {
   }
 }, { passive: false });
 
-eventCanvas.addEventListener("touchmove", e => {
+canvas.addEventListener("touchmove", e => {
   e.preventDefault();
   if (isZooming && e.touches.length === 2) {
     const t0 = e.touches[0], t1 = e.touches[1];
@@ -558,111 +569,75 @@ eventCanvas.addEventListener("touchmove", e => {
   }
 }, { passive: false });
 
-eventCanvas.addEventListener("touchend", e => {
+canvas.addEventListener("touchend", e => {
   if (e.touches.length < 2) isZooming = false;
   if (e.touches.length === 0) stopDrawing();
 });
 
-/* ══════════════════════════════════════════
-   Rebuild GL from paths array
-══════════════════════════════════════════ */
-function rebuildGL() {
-  // حذف buffers القديمة
-  for (const b of glBatches) gl.deleteBuffer(b.buf);
-  glBatches = [];
-  for (const p of paths) pathToGL(p);
-  clearLiveCanvas();
-  redrawAll();
-}
-
-/* ══════════════════════════════════════════
-   Quick colours
-══════════════════════════════════════════ */
-const QUICK_COLORS = [
-  "#000000","#ffffff","#ef4444","#f97316","#eab308",
-  "#22c55e","#3b82f6","#8b5cf6","#ec4899","#6b7280","#78350f","#0ea5e9"
-];
-const qcContainer = document.getElementById("quickColors");
-QUICK_COLORS.forEach(c => {
-  const btn = document.createElement("button");
-  btn.className = "qcolor"; btn.style.background = c; btn.title = c;
-  if (c === colorPicker.value) btn.classList.add("selected");
-  btn.onclick = () => {
-    colorPicker.value = c;
-    document.querySelectorAll(".qcolor").forEach(b => b.classList.remove("selected"));
-    btn.classList.add("selected");
-  };
-  qcContainer.appendChild(btn);
-});
-colorPicker.addEventListener("input", () =>
-  document.querySelectorAll(".qcolor").forEach(b => b.classList.remove("selected")));
-
-/* ══════════════════════════════════════════
-   Tool selection
-══════════════════════════════════════════ */
+/* ═══════════ Tool selection ═══════════ */
 function setTool(tool) {
   currentTool = tool;
-  document.querySelectorAll(".draw-tool-btn").forEach(b =>
-    b.classList.toggle("active", b.dataset.tool === tool));
+  document.querySelectorAll(".draw-tool-btn").forEach(b => {
+    b.classList.toggle("active", b.dataset.tool === tool);
+  });
+  canvas.className = tool === "pencil" ? "pencil-cursor" : "";
 }
-document.querySelectorAll(".draw-tool-btn").forEach(b =>
-  b.onclick = () => setTool(b.dataset.tool));
+document.querySelectorAll(".draw-tool-btn").forEach(b => {
+  b.onclick = () => { setTool(b.dataset.tool); };
+});
 
-/* ══════════════════════════════════════════
-   Menus
-══════════════════════════════════════════ */
+/* ═══════════ Menus ═══════════ */
 const toolsMenu    = document.getElementById("toolsMenu");
 const dropdownMenu = document.getElementById("dropdownMenu");
 
 document.getElementById("paletteBtn").onclick = e => {
   e.stopPropagation();
-  toolsMenu.style.display = toolsMenu.style.display === "flex" ? "none" : "flex";
+  const open = toolsMenu.style.display === "flex";
+  toolsMenu.style.display    = open ? "none" : "flex";
   dropdownMenu.style.display = "none";
 };
 document.getElementById("menuToggle").onclick = e => {
   e.stopPropagation();
-  dropdownMenu.style.display = dropdownMenu.style.display === "flex" ? "none" : "flex";
-  toolsMenu.style.display = "none";
+  const open = dropdownMenu.style.display === "flex";
+  dropdownMenu.style.display = open ? "none" : "flex";
+  toolsMenu.style.display    = "none";
 };
 document.addEventListener("click", () => {
-  toolsMenu.style.display = dropdownMenu.style.display = "none";
+  toolsMenu.style.display    = "none";
+  dropdownMenu.style.display = "none";
 });
 [toolsMenu, dropdownMenu].forEach(m => m.addEventListener("click", e => e.stopPropagation()));
 
-/* ══════════════════════════════════════════
-   Buttons
-══════════════════════════════════════════ */
+/* ═══════════ Buttons ═══════════ */
 document.getElementById("clearBtn").onclick = () => {
   if (currentRoom) db.ref(`rooms/${currentRoom}/paths`).remove();
-  paths = []; undonePaths = []; rebuildGL();
+  paths = []; undonePaths = []; offDirty = true; drawAll();
 };
 document.getElementById("undoBtn").onclick = () => {
   if (!paths.length) return;
   undonePaths.push(paths.pop());
   if (currentRoom) db.ref(`rooms/${currentRoom}/paths`).set(paths.length ? paths : null);
-  rebuildGL();
+  offDirty = true; drawAll();
 };
 document.getElementById("redoBtn").onclick = () => {
   if (!undonePaths.length) return;
   paths.push(undonePaths.pop());
   if (currentRoom) db.ref(`rooms/${currentRoom}/paths`).set(paths);
-  rebuildGL();
+  offDirty = true; drawAll();
 };
 document.getElementById("saveBtn").onclick = () => {
-  // دمج الطبقتين في صورة واحدة
   const tmp = document.createElement("canvas");
-  tmp.width = glCanvas.width; tmp.height = glCanvas.height;
+  tmp.width = canvas.width; tmp.height = canvas.height;
   const tc = tmp.getContext("2d");
-  tc.fillStyle = "white"; tc.fillRect(0,0,tmp.width,tmp.height);
-  tc.drawImage(glCanvas, 0, 0);
-  tc.drawImage(drawCanvas, 0, 0);
+  tc.fillStyle = "white"; tc.fillRect(0, 0, tmp.width, tmp.height);
+  tc.drawImage(canvas, 0, 0);
   const a = document.createElement("a");
   a.download = "drawing.png"; a.href = tmp.toDataURL(); a.click();
 };
 document.getElementById("saveJsonBtn").onclick = () => {
   const blob = new Blob([JSON.stringify({paths,zoom,panX,panY})], {type:"application/json"});
-  const a = document.createElement("a"); a.download = "drawing.json";
-  a.href = URL.createObjectURL(blob); a.click();
+  const a = document.createElement("a");
+  a.download = "drawing.json"; a.href = URL.createObjectURL(blob); a.click();
 };
 document.getElementById("loadJsonBtn").onclick = () =>
   document.getElementById("jsonFileInput").click();
@@ -673,15 +648,13 @@ document.getElementById("jsonFileInput").addEventListener("change", e => {
     try {
       const d = JSON.parse(ev.target.result);
       paths = d.paths||[]; zoom = d.zoom||1; panX = d.panX||0; panY = d.panY||0;
-      undonePaths = []; rebuildGL();
+      undonePaths = []; drawAll();
     } catch { alert("خطأ في الملف"); }
   };
   reader.readAsText(file); e.target.value = "";
 });
 
-/* ══════════════════════════════════════════
-   Rooms
-══════════════════════════════════════════ */
+/* ═══════════ Rooms ═══════════ */
 document.getElementById("newRoomBtn").onclick = () => {
   const code = Math.random().toString(36).substring(2,7).toUpperCase();
   document.getElementById("roomCodeInput").value = code;
@@ -709,15 +682,12 @@ function joinRoom(code) {
   db.ref(`rooms/${currentRoom}/paths`).on("value", snap => {
     const data = snap.val();
     paths = data ? Object.values(data) : [];
-    rebuildGL();
+    offDirty = true; drawAll();
   });
   notify("انضممت للغرفة: " + code);
 }
 
-/* ══════════════════════════════════════════
-   Init
-══════════════════════════════════════════ */
-resizeAll();
+drawAll();
 </script>
 </body>
 </html>
