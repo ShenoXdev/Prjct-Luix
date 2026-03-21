@@ -114,7 +114,10 @@
     <label for="brushSize">الحجم:</label>
     <input type="number" id="brushSize" min="1" max="100" value="3">
   </div>
-  <button id="menuToggle" class="tool-button" style="border:none;background:none;font-size:20px;">⋯</button>
+  <div style="display:flex;gap:6px;align-items:center;">
+    <button id="homeBtn" class="tool-button" title="العودة للبداية (H)" style="font-size:18px;">🏠</button>
+    <button id="menuToggle" class="tool-button" style="border:none;background:none;font-size:20px;">⋯</button>
+  </div>
 </div>
 
 <div id="bottomBar">
@@ -200,6 +203,16 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 const clientId = Math.random().toString(36).substring(2, 10);
 
+// مراقبة حالة الاتصال بـ Firebase
+db.ref(".info/connected").on("value", snap => {
+  const connected = snap.val() === true;
+  const el = document.getElementById("connectionStatus");
+  if (currentRoom) {
+    el.classList.toggle("status-connected",    connected);
+    el.classList.toggle("status-disconnected", !connected);
+  }
+});
+
 /* ══ Canvas setup ══ */
 const canvas      = document.getElementById("mainCanvas");
 const ctx         = canvas.getContext("2d");
@@ -208,17 +221,18 @@ const brushSizeEl = document.getElementById("brushSize");
 const zoomInfoEl  = document.getElementById("zoomInfo");
 const syncNote    = document.getElementById("syncNotification");
 
-// Offscreen canvas — يخزن الرسم المكتمل بإحداثيات عالمية (بدون zoom/pan)
-const off    = document.createElement("canvas");
-const offCtx = off.getContext("2d");
+// no offscreen — paths drawn directly each frame
+
+const DPR = window.devicePixelRatio || 1;
 
 function resizeAll() {
   const W = window.innerWidth;
   const H = window.innerHeight - 96;
-  canvas.width  = W;
-  canvas.height = H;
-  // الـ offscreen أكبر بكتير عشان يتحمل الرسم في أي اتجاه
-  if (off.width < 4000)  { off.width  = 4000; off.height = 4000; }
+  // حجم فعلي بالـ pixels الحقيقية عشان يكون واضح على كل الشاشات
+  canvas.width  = W * DPR;
+  canvas.height = H * DPR;
+  canvas.style.width  = W + "px";
+  canvas.style.height = H + "px";
   compose();
 }
 window.addEventListener("resize", resizeAll);
@@ -231,6 +245,7 @@ let isZooming = false, lastTouchDist = 0;
 let isPanning = false, panStartX = 0, panStartY = 0, panStartPX = 0, panStartPY = 0;
 let currentRoom = null, currentPathId = null;
 let currentTool = "brush";
+let livePaths = {}; // strokes من الأعضاء الآخرين أثناء رسمهم
 
 /* ══ Helpers ══ */
 function notify(msg, ms = 2000) {
@@ -239,13 +254,14 @@ function notify(msg, ms = 2000) {
   setTimeout(() => syncNote.classList.remove("show"), ms);
 }
 function updateZoomInfo() {
-  zoomInfoEl.textContent = `زوم: ${zoom.toFixed(2)}x`;
+  if (zoom < 0.0001) zoomInfoEl.textContent = `زوم: ${zoom.toExponential(2)}x`;
+  else zoomInfoEl.textContent = `زوم: ${zoom.toFixed(zoom >= 1 ? 2 : 6)}x`;
 }
 function toWorld(sx, sy) {
   const r = canvas.getBoundingClientRect();
   return {
-    x: (sx - r.left - panX) / zoom,
-    y: (sy - r.top  - panY) / zoom
+    x: ((sx - r.left) * DPR - panX) / zoom,
+    y: ((sy - r.top)  * DPR - panY) / zoom
   };
 }
 function hexToComponents(hex) {
@@ -256,44 +272,72 @@ function hexToComponents(hex) {
   };
 }
 
-/* ══ Pencil grains ══ */
+/* seeded PRNG — Mulberry32 */
+function seededRand(seed) {
+  let s = seed >>> 0;
+  return function() {
+    s += 0x6D2B79F5;
+    let t = Math.imul(s ^ s >>> 15, 1 | s);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+/* ══ Pencil grains — ثابتة تماماً بـ seed من الـ path ══ */
 function generateGrains(path) {
+  const p0 = path.points[0];
+  const seedVal = Math.abs(Math.round(p0.x * 73856093) ^ Math.round(p0.y * 19349663) ^ (path.t || 1));
+  const rng = seededRand(seedVal);
+
   path.grains = [];
   const pts = path.points, size = path.size;
-  const spread = size * 0.7, baseRad = 0.12 + size * 0.04;
+  const spread = size * 0.7;
+  // صغير جداً — max 1px
+  const pxSize = Math.max(0.5, size * 0.12 * DPR);
+
   for (let i = 1; i < pts.length; i++) {
     const dx = pts[i].x - pts[i-1].x, dy = pts[i].y - pts[i-1].y;
     const len = Math.sqrt(dx*dx + dy*dy);
     if (len === 0) continue;
-    const count = Math.max(4, Math.floor(len / 0.8) * size * 0.5);
+    // عشرة أضعاف العدد
+    const count = Math.max(40, Math.floor(len / 0.08) * size * 0.5);
     for (let j = 0; j < count; j++) {
-      const t = Math.random();
+      const t = rng();
       path.grains.push({
-        x:   pts[i-1].x + dx*t + (Math.random()-.5)*2*spread,
-        y:   pts[i-1].y + dy*t + (Math.random()-.5)*2*spread,
-        rad: baseRad * (.4 + Math.random()*.9),
-        a:   0.25 + Math.random()*.55
+        x:  pts[i-1].x + dx*t + (rng()-.5)*2*spread,
+        y:  pts[i-1].y + dy*t + (rng()-.5)*2*spread,
+        px: pxSize * (0.4 + rng() * 0.6),
+        a:  0.05 + rng() * 0.18   // opacity منخفضة جداً
       });
     }
   }
 }
 
-/* ══ Draw one path onto any context (world coords) ══ */
+/* ══ Draw one path ══ */
 function renderPath(c, path) {
   if (!path.points || path.points.length < 2) return;
-  c.save();
+
   if (path.tool === "pencil") {
+    // رسم في screen-space — الحجم ثابت مش بيكبر مع الزوم، وبكسلة حقيقية
     if (!path.grains) generateGrains(path);
     const { r, g, b } = hexToComponents(path.color);
+    c.save();
+    c.setTransform(1, 0, 0, 1, 0, 0);
+    c.imageSmoothingEnabled = false;
+    // الـ px بيتضرب في zoom عشان يتصغر مع zoom out ويتكبر مع zoom in
+    // بالظبط زي أي عنصر في اللوحة
     for (const gr of path.grains) {
-      c.beginPath();
-      c.arc(gr.x, gr.y, gr.rad, 0, Math.PI*2);
+      const sx  = Math.round(gr.x * zoom + panX);
+      const sy  = Math.round(gr.y * zoom + panY);
+      const spx = Math.max(1, Math.round(gr.px * zoom));
       c.fillStyle = `rgba(${r},${g},${b},${gr.a.toFixed(2)})`;
-      c.fill();
+      c.fillRect(sx, sy, spx, spx);
     }
+    c.restore();
   } else {
+    c.save();
     c.strokeStyle = path.color;
-    c.lineWidth   = path.size;
+    c.lineWidth   = path.size * DPR;
     c.lineCap     = "round";
     c.lineJoin    = "round";
     c.beginPath();
@@ -301,48 +345,77 @@ function renderPath(c, path) {
     for (let i = 1; i < path.points.length; i++)
       c.lineTo(path.points[i].x, path.points[i].y);
     c.stroke();
+    c.restore();
   }
-  c.restore();
 }
 
-/* ══ Offscreen: stamp one path ══ */
-function stampToOff(path) {
-  offCtx.save();
-  offCtx.setTransform(1, 0, 0, 1, 0, 0);
-  renderPath(offCtx, path);
-  offCtx.restore();
-}
+/* ══ stampToOff / rebuildOff — just trigger compose ══ */
+function stampToOff()  { compose(); }
+function rebuildOff()  { compose(); }
 
-/* ══ Rebuild offscreen from scratch ══ */
-function rebuildOff() {
-  offCtx.setTransform(1, 0, 0, 1, 0, 0);
-  offCtx.clearRect(0, 0, off.width, off.height);
-  for (const p of paths) renderPath(offCtx, p);
-}
-
-/* ══ Compose: offscreen → main canvas with zoom/pan ══ */
+/* ══ Compose ══ */
 function compose() {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = "white";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // الـ brush يحتاج transform — الـ pencil بيحسب screen coords بنفسه
+  ctx.save();
   ctx.setTransform(zoom, 0, 0, zoom, panX, panY);
-  ctx.drawImage(off, 0, 0);
+  for (const p of paths) {
+    if (p.tool !== "pencil") renderPath(ctx, p);
+  }
+  if (drawing && currentPath && currentPath.points.length > 1) {
+    renderLivePath(ctx, currentPath);
+  }
+  for (const p of Object.values(livePaths)) renderLivePath(ctx, p);
+  ctx.restore();
+
+  // الـ pencil بيترسم بعد restore عشان يشتغل بـ screen coords نظيفة
+  for (const p of paths) {
+    if (p.tool === "pencil") renderPath(ctx, p);
+  }
+
   updateZoomInfo();
 }
 
 /* ══ Zoom ══ */
 function applyZoom(nz, sx, sy) {
-  nz = Math.max(0.05, Math.min(nz, 100));
+  nz = Math.max(1e-38, Math.min(nz, 1e25));
   const r  = canvas.getBoundingClientRect();
-  const wx = (sx - r.left - panX) / zoom;
-  const wy = (sy - r.top  - panY) / zoom;
+  const wx = ((sx - r.left) * DPR - panX) / zoom;
+  const wy = ((sy - r.top)  * DPR - panY) / zoom;
   zoom = nz;
-  panX = sx - r.left - wx * zoom;
-  panY = sy - r.top  - wy * zoom;
+  panX = (sx - r.left) * DPR - wx * zoom;
+  panY = (sy - r.top)  * DPR - wy * zoom;
   compose();
 }
 
-/* ══ Live drawing on main canvas ══ */
+/* ══ Live path preview ══ */
+function renderLivePath(c, path) {
+  if (!path || path.points.length < 2) return;
+  c.save();
+  if (path.tool === "pencil") {
+    c.globalAlpha = 0.45;
+    c.strokeStyle = path.color;
+    c.lineWidth   = Math.max(0.5, path.size * 0.35) * DPR;
+    c.lineCap = "round"; c.lineJoin = "round";
+    c.beginPath();
+    c.moveTo(path.points[0].x, path.points[0].y);
+    for (let i = 1; i < path.points.length; i++) c.lineTo(path.points[i].x, path.points[i].y);
+    c.stroke();
+  } else {
+    c.strokeStyle = path.color;
+    c.lineWidth   = path.size * DPR;
+    c.lineCap = "round"; c.lineJoin = "round";
+    c.beginPath();
+    c.moveTo(path.points[0].x, path.points[0].y);
+    for (let i = 1; i < path.points.length; i++) c.lineTo(path.points[i].x, path.points[i].y);
+    c.stroke();
+  }
+  c.restore();
+}
+
 let liveLastX = 0, liveLastY = 0;
 
 function startDrawing(sx, sy) {
@@ -359,36 +432,12 @@ function startDrawing(sx, sy) {
   if (currentRoom) {
     const ref = db.ref(`rooms/${currentRoom}/paths`).push();
     currentPathId = ref.key;
-    ref.set({ color: currentPath.color, size: currentPath.size,
-               tool: currentPath.tool, points: currentPath.points });
+    // لا نبعت حاجة دلوقتي — هنبعت الـ path كامل في stopDrawing
   }
 }
 
 function drawLiveSegment(x1, y1, x2, y2, path) {
-  // رسم مباشر على main canvas فوق الـ offscreen (في إحداثيات عالمية مع transform)
-  ctx.save();
-  ctx.setTransform(zoom, 0, 0, zoom, panX, panY);
-  if (path.tool === "pencil") {
-    const { r, g, b } = hexToComponents(path.color);
-    const dx = x2-x1, dy = y2-y1, len = Math.sqrt(dx*dx+dy*dy);
-    const spread = path.size*.7, baseRad = .12+path.size*.04;
-    const count  = Math.max(2, Math.floor(len/.8)*path.size*.5);
-    for (let j = 0; j < count; j++) {
-      const t = Math.random();
-      const rad = baseRad*(.4+Math.random()*.9);
-      const a   = .25+Math.random()*.55;
-      ctx.beginPath();
-      ctx.arc(x1+dx*t+(Math.random()-.5)*2*spread, y1+dy*t+(Math.random()-.5)*2*spread, rad, 0, Math.PI*2);
-      ctx.fillStyle = `rgba(${r},${g},${b},${a.toFixed(2)})`;
-      ctx.fill();
-    }
-  } else {
-    ctx.strokeStyle = path.color;
-    ctx.lineWidth   = path.size;
-    ctx.lineCap = "round"; ctx.lineJoin = "round";
-    ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
-  }
-  ctx.restore();
+  compose(); // يرسم كل الـ paths + الـ stroke الحالي
 }
 
 function continueDrawing(sx, sy) {
@@ -397,8 +446,16 @@ function continueDrawing(sx, sy) {
   currentPath.points.push(pos);
   drawLiveSegment(liveLastX, liveLastY, pos.x, pos.y, currentPath);
   liveLastX = pos.x; liveLastY = pos.y;
-  if (currentRoom && currentPathId)
-    db.ref(`rooms/${currentRoom}/paths/${currentPathId}/points`).set(currentPath.points);
+  // إرسال real-time للـ room كل 5 نقط
+  if (currentRoom && currentPathId && currentPath.points.length % 5 === 0) {
+    db.ref(`rooms/${currentRoom}/live/${clientId}`).set({
+      color:  currentPath.color,
+      size:   currentPath.size,
+      tool:   currentPath.tool,
+      points: currentPath.points,
+      ts:     Date.now()
+    });
+  }
 }
 
 function stopDrawing() {
@@ -406,10 +463,24 @@ function stopDrawing() {
     if (currentPath.tool === "pencil") generateGrains(currentPath);
     paths.push(currentPath);
     undonePaths = [];
-    stampToOff(currentPath);  // أضفه للـ offscreen بدون rebuild
+    stampToOff(currentPath);
     compose();
+    // تحديث الـ path كامل في Firebase
+    if (currentRoom && currentPathId) {
+      db.ref(`rooms/${currentRoom}/paths/${currentPathId}`).set({
+        color:  currentPath.color,
+        size:   currentPath.size,
+        tool:   currentPath.tool,
+        points: currentPath.points,
+        t:      currentPath.t
+      });
+    }
   }
-  drawing = false; currentPath = null;
+  // امسح الـ live node بعد ما الرسم خلص
+  if (currentRoom && currentPathId) {
+    db.ref(`rooms/${currentRoom}/live/${clientId}`).remove();
+  }
+  drawing = false; currentPath = null; currentPathId = null;
 }
 
 /* ══ Events — Mouse ══ */
@@ -444,8 +515,8 @@ function startPan(sx, sy) {
   canvas.classList.add("panning");
 }
 function continuePan(sx, sy) {
-  panX = panStartPX + (sx - panStartX);
-  panY = panStartPY + (sy - panStartY);
+  panX = panStartPX + (sx - panStartX) * DPR;
+  panY = panStartPY + (sy - panStartY) * DPR;
   compose();
 }
 function stopPan() {
@@ -497,10 +568,11 @@ window.addEventListener("keydown", e => {
   if (ctrl && e.key === "s" && e.shiftKey)  { e.preventDefault(); doSaveJson(); }
   if (ctrl && e.key === "o")          { e.preventDefault(); document.getElementById("jsonFileInput").click(); }
   if (e.key === "Delete" && !e.ctrlKey) { doClear(); }
+  if (e.key === "h" || e.key === "H") { zoom=1; panX=0; panY=0; compose(); }
   if (e.key === "b" || e.key === "B") setTool("brush");
   if (e.key === "p" || e.key === "P") setTool("pencil");
-  if (ctrl && (e.key==="+" || e.key==="=")) { e.preventDefault(); applyZoom(zoom*1.2, canvas.width/2, canvas.height/2); }
-  if (ctrl && e.key==="-")            { e.preventDefault(); applyZoom(zoom*0.8, canvas.width/2, canvas.height/2); }
+  if (ctrl && (e.key==="+" || e.key==="=")) { e.preventDefault(); applyZoom(zoom*1.2, window.innerWidth/2, window.innerHeight/2); }
+  if (ctrl && e.key==="-")            { e.preventDefault(); applyZoom(zoom*0.8, window.innerWidth/2, window.innerHeight/2); }
   if (ctrl && e.key==="0")            { e.preventDefault(); zoom=1; panX=0; panY=0; compose(); }
   // ? أو / لعرض الاختصارات
   if (e.key === "?" || e.key === "/") {
@@ -509,6 +581,7 @@ window.addEventListener("keydown", e => {
       "Ctrl+S  حفظ PNG       Ctrl+Shift+S  حفظ JSON\n" +
       "Ctrl+O  فتح JSON      Delete  مسح الكل\n" +
       "B  فرشاة              P  قلم رصاص\n" +
+      "H  العودة للبداية\n" +
       "Ctrl++/-  زوم         Ctrl+0  إعادة ضبط الزوم\n" +
       "زر أوسط/يمين + سحب  تحريك اللوحة\n" +
       "Scroll  زوم";
@@ -532,7 +605,10 @@ function doRedo() {
   stampToOff(paths[paths.length-1]); compose();
 }
 function doClear() {
-  if (currentRoom) db.ref(`rooms/${currentRoom}/paths`).remove();
+  if (currentRoom) {
+    db.ref(`rooms/${currentRoom}/paths`).remove();
+    sendClearEvent();
+  }
   paths = []; undonePaths = []; rebuildOff(); compose();
 }
 function doSavePng() {
@@ -551,6 +627,7 @@ function doSaveJson() {
 }
 
 /* ══ Buttons ══ */
+document.getElementById("homeBtn").onclick = () => { zoom=1; panX=0; panY=0; compose(); notify("العودة للبداية"); };
 document.getElementById("undoBtn").onclick  = doUndo;
 document.getElementById("redoBtn").onclick  = doRedo;
 document.getElementById("clearBtn").onclick = doClear;
@@ -625,26 +702,83 @@ document.getElementById("joinRoomBtn").onclick = () => {
   if (code) joinRoom(code); else alert("أدخل كود الغرفة");
 };
 document.getElementById("leaveRoomBtn").onclick = () => {
-  if (currentRoom) { db.ref(`rooms/${currentRoom}/paths`).off(); currentRoom=null; }
+  if (currentRoom) {
+    db.ref(`rooms/${currentRoom}/paths`).off();
+    db.ref(`rooms/${currentRoom}/events`).off();
+    db.ref(`rooms/${currentRoom}/live`).off();
+    db.ref(`rooms/${currentRoom}/live/${clientId}`).remove();
+    currentRoom = null;
+  }
+  livePaths = {};
   document.getElementById("connectionStatus").classList.remove("status-connected");
   document.getElementById("newRoomBtn").style.display   = "";
   document.getElementById("joinRoomBtn").style.display  = "";
   document.getElementById("leaveRoomBtn").style.display = "none";
   notify("غادرت الغرفة");
 };
+
+function sanitizePath(p) {
+  // تأكد إن الـ path فيه كل الحاجات الضرورية
+  if (!p || !p.points || !Array.isArray(p.points)) return null;
+  return {
+    color:  p.color  || "#000000",
+    size:   p.size   || 3,
+    tool:   p.tool   || "brush",
+    points: p.points.filter(pt => pt && typeof pt.x === "number" && typeof pt.y === "number"),
+    t:      p.t      || 0
+  };
+}
+
 function joinRoom(code) {
-  if (currentRoom) db.ref(`rooms/${currentRoom}/paths`).off();
-  currentRoom=code; paths=[];
+  if (currentRoom) {
+    db.ref(`rooms/${currentRoom}/paths`).off();
+    db.ref(`rooms/${currentRoom}/events`).off();
+  }
+  currentRoom = code;
+  paths = [];
   document.getElementById("connectionStatus").classList.add("status-connected");
   document.getElementById("newRoomBtn").style.display   = "none";
   document.getElementById("joinRoomBtn").style.display  = "none";
   document.getElementById("leaveRoomBtn").style.display = "";
+
+  // استماع للـ paths المكتملة
   db.ref(`rooms/${currentRoom}/paths`).on("value", snap => {
     const data = snap.val();
-    paths = data ? Object.values(data) : [];
-    rebuildOff(); compose();
-  });
+    if (!data) { paths = []; compose(); return; }
+    paths = Object.values(data)
+      .map(sanitizePath)
+      .filter(p => p && p.points.length > 1);
+    compose();
+  }, err => console.error("Firebase paths error:", err));
+
+  // استماع للـ live strokes من الآخرين
+  db.ref(`rooms/${currentRoom}/live`).on("value", snap => {
+    const data = snap.val();
+    livePaths = {};
+    if (data) {
+      Object.entries(data).forEach(([id, p]) => {
+        if (id === clientId) return; // مش بنرسم اللي بعتناه إحنا
+        const sp = sanitizePath(p);
+        if (sp && sp.points.length > 1) livePaths[id] = sp;
+      });
+    }
+    compose();
+  }, err => console.error("Firebase live error:", err));
+
+  // استماع للأحداث (clear)
+  db.ref(`rooms/${currentRoom}/events`).limitToLast(20).on("child_added", snap => {
+    const ev = snap.val();
+    if (!ev || ev.clientId === clientId) return;
+    if (ev.type === "clear") { paths = []; undonePaths = []; livePaths = {}; compose(); }
+  }, err => console.error("Firebase events error:", err));
+
   notify("انضممت للغرفة: " + code);
+}
+
+// إرسال حدث clear للغرفة
+function sendClearEvent() {
+  if (!currentRoom) return;
+  db.ref(`rooms/${currentRoom}/events`).push({ type: "clear", clientId, t: Date.now() });
 }
 
 /* ══ Init ══ */
