@@ -272,11 +272,13 @@ function hexToComponents(hex) {
   };
 }
 
-/* ══ Pencil grains ══ */
+/* ══ Pencil grains — world coords, fixed pixel size ══ */
 function generateGrains(path) {
   path.grains = [];
   const pts = path.points, size = path.size;
-  const spread = size * 0.7, baseRad = 0.12 + size * 0.04;
+  const spread = size * 0.7;
+  // حجم الـ grain بالـ pixels الحقيقية (مش world units) — ثابت مهما تزوم
+  const pxSize = Math.max(1, Math.round(size * 0.55));
   for (let i = 1; i < pts.length; i++) {
     const dx = pts[i].x - pts[i-1].x, dy = pts[i].y - pts[i-1].y;
     const len = Math.sqrt(dx*dx + dy*dy);
@@ -285,31 +287,36 @@ function generateGrains(path) {
     for (let j = 0; j < count; j++) {
       const t = Math.random();
       path.grains.push({
-        x:   pts[i-1].x + dx*t + (Math.random()-.5)*2*spread,
-        y:   pts[i-1].y + dy*t + (Math.random()-.5)*2*spread,
-        rad: baseRad * (.4 + Math.random()*.9) * DPR,
-        a:   0.25 + Math.random()*.55
+        x:  pts[i-1].x + dx*t + (Math.random()-.5)*2*spread,
+        y:  pts[i-1].y + dy*t + (Math.random()-.5)*2*spread,
+        px: pxSize + Math.round(Math.random() * pxSize * 0.6), // حجم بالـ pixels
+        a:  0.28 + Math.random()*.50
       });
     }
   }
 }
 
-/* ══ Draw one path onto any context (world coords) ══ */
+/* ══ Draw one path ══ */
 function renderPath(c, path) {
   if (!path.points || path.points.length < 2) return;
-  c.save();
+
   if (path.tool === "pencil") {
+    // رسم في screen-space — الحجم ثابت مش بيكبر مع الزوم، وبكسلة حقيقية
     if (!path.grains) generateGrains(path);
     const { r, g, b } = hexToComponents(path.color);
+    c.save();
+    c.setTransform(1, 0, 0, 1, 0, 0);
+    c.imageSmoothingEnabled = false;
     for (const gr of path.grains) {
-      c.beginPath();
-      c.arc(gr.x, gr.y, gr.rad, 0, Math.PI*2);
+      const sx = Math.round(gr.x * zoom + panX);
+      const sy = Math.round(gr.y * zoom + panY);
       c.fillStyle = `rgba(${r},${g},${b},${gr.a.toFixed(2)})`;
-      c.fill();
+      c.fillRect(sx, sy, gr.px, gr.px);
     }
+    c.restore();
   } else {
+    c.save();
     c.strokeStyle = path.color;
-    // نضرب الـ lineWidth في DPR عشان الخط يبقى حاد على كل الشاشات
     c.lineWidth   = path.size * DPR;
     c.lineCap     = "round";
     c.lineJoin    = "round";
@@ -318,8 +325,8 @@ function renderPath(c, path) {
     for (let i = 1; i < path.points.length; i++)
       c.lineTo(path.points[i].x, path.points[i].y);
     c.stroke();
+    c.restore();
   }
-  c.restore();
 }
 
 /* ══ stampToOff / rebuildOff — just trigger compose ══ */
