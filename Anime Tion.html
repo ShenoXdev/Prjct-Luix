@@ -212,13 +212,17 @@ const syncNote    = document.getElementById("syncNotification");
 const off    = document.createElement("canvas");
 const offCtx = off.getContext("2d");
 
+const DPR = window.devicePixelRatio || 1;
+
 function resizeAll() {
   const W = window.innerWidth;
   const H = window.innerHeight - 96;
-  canvas.width  = W;
-  canvas.height = H;
-  // الـ offscreen أكبر بكتير عشان يتحمل الرسم في أي اتجاه
-  if (off.width < 4000)  { off.width  = 4000; off.height = 4000; }
+  // حجم فعلي بالـ pixels الحقيقية عشان يكون واضح على كل الشاشات
+  canvas.width  = W * DPR;
+  canvas.height = H * DPR;
+  canvas.style.width  = W + "px";
+  canvas.style.height = H + "px";
+  if (off.width < 8000) { off.width = 8000; off.height = 8000; }
   compose();
 }
 window.addEventListener("resize", resizeAll);
@@ -239,13 +243,14 @@ function notify(msg, ms = 2000) {
   setTimeout(() => syncNote.classList.remove("show"), ms);
 }
 function updateZoomInfo() {
-  zoomInfoEl.textContent = `زوم: ${zoom.toFixed(2)}x`;
+  if (zoom < 0.0001) zoomInfoEl.textContent = `زوم: ${zoom.toExponential(2)}x`;
+  else zoomInfoEl.textContent = `زوم: ${zoom.toFixed(zoom >= 1 ? 2 : 6)}x`;
 }
 function toWorld(sx, sy) {
   const r = canvas.getBoundingClientRect();
   return {
-    x: (sx - r.left - panX) / zoom,
-    y: (sy - r.top  - panY) / zoom
+    x: ((sx - r.left) * DPR - panX) / zoom,
+    y: ((sy - r.top)  * DPR - panY) / zoom
   };
 }
 function hexToComponents(hex) {
@@ -332,13 +337,13 @@ function compose() {
 
 /* ══ Zoom ══ */
 function applyZoom(nz, sx, sy) {
-  nz = Math.max(0.05, Math.min(nz, 100));
+  nz = Math.max(1e-38, Math.min(nz, 1e25));
   const r  = canvas.getBoundingClientRect();
-  const wx = (sx - r.left - panX) / zoom;
-  const wy = (sy - r.top  - panY) / zoom;
+  const wx = ((sx - r.left) * DPR - panX) / zoom;
+  const wy = ((sy - r.top)  * DPR - panY) / zoom;
   zoom = nz;
-  panX = sx - r.left - wx * zoom;
-  panY = sy - r.top  - wy * zoom;
+  panX = (sx - r.left) * DPR - wx * zoom;
+  panY = (sy - r.top)  * DPR - wy * zoom;
   compose();
 }
 
@@ -359,8 +364,7 @@ function startDrawing(sx, sy) {
   if (currentRoom) {
     const ref = db.ref(`rooms/${currentRoom}/paths`).push();
     currentPathId = ref.key;
-    ref.set({ color: currentPath.color, size: currentPath.size,
-               tool: currentPath.tool, points: currentPath.points });
+    // لا نبعت حاجة دلوقتي — هنبعت الـ path كامل في stopDrawing
   }
 }
 
@@ -397,8 +401,7 @@ function continueDrawing(sx, sy) {
   currentPath.points.push(pos);
   drawLiveSegment(liveLastX, liveLastY, pos.x, pos.y, currentPath);
   liveLastX = pos.x; liveLastY = pos.y;
-  if (currentRoom && currentPathId)
-    db.ref(`rooms/${currentRoom}/paths/${currentPathId}/points`).set(currentPath.points);
+  // Firebase update يحصل في stopDrawing بس عشان نقلل الكتابات
 }
 
 function stopDrawing() {
@@ -406,10 +409,20 @@ function stopDrawing() {
     if (currentPath.tool === "pencil") generateGrains(currentPath);
     paths.push(currentPath);
     undonePaths = [];
-    stampToOff(currentPath);  // أضفه للـ offscreen بدون rebuild
+    stampToOff(currentPath);
     compose();
+    // تحديث الـ path كامل في Firebase
+    if (currentRoom && currentPathId) {
+      db.ref(`rooms/${currentRoom}/paths/${currentPathId}`).set({
+        color:  currentPath.color,
+        size:   currentPath.size,
+        tool:   currentPath.tool,
+        points: currentPath.points,
+        t:      currentPath.t
+      });
+    }
   }
-  drawing = false; currentPath = null;
+  drawing = false; currentPath = null; currentPathId = null;
 }
 
 /* ══ Events — Mouse ══ */
@@ -444,8 +457,8 @@ function startPan(sx, sy) {
   canvas.classList.add("panning");
 }
 function continuePan(sx, sy) {
-  panX = panStartPX + (sx - panStartX);
-  panY = panStartPY + (sy - panStartY);
+  panX = panStartPX + (sx - panStartX) * DPR;
+  panY = panStartPY + (sy - panStartY) * DPR;
   compose();
 }
 function stopPan() {
@@ -499,8 +512,8 @@ window.addEventListener("keydown", e => {
   if (e.key === "Delete" && !e.ctrlKey) { doClear(); }
   if (e.key === "b" || e.key === "B") setTool("brush");
   if (e.key === "p" || e.key === "P") setTool("pencil");
-  if (ctrl && (e.key==="+" || e.key==="=")) { e.preventDefault(); applyZoom(zoom*1.2, canvas.width/2, canvas.height/2); }
-  if (ctrl && e.key==="-")            { e.preventDefault(); applyZoom(zoom*0.8, canvas.width/2, canvas.height/2); }
+  if (ctrl && (e.key==="+" || e.key==="=")) { e.preventDefault(); applyZoom(zoom*1.2, window.innerWidth/2, window.innerHeight/2); }
+  if (ctrl && e.key==="-")            { e.preventDefault(); applyZoom(zoom*0.8, window.innerWidth/2, window.innerHeight/2); }
   if (ctrl && e.key==="0")            { e.preventDefault(); zoom=1; panX=0; panY=0; compose(); }
   // ? أو / لعرض الاختصارات
   if (e.key === "?" || e.key === "/") {
@@ -532,7 +545,10 @@ function doRedo() {
   stampToOff(paths[paths.length-1]); compose();
 }
 function doClear() {
-  if (currentRoom) db.ref(`rooms/${currentRoom}/paths`).remove();
+  if (currentRoom) {
+    db.ref(`rooms/${currentRoom}/paths`).remove();
+    sendClearEvent();
+  }
   paths = []; undonePaths = []; rebuildOff(); compose();
 }
 function doSavePng() {
@@ -625,26 +641,68 @@ document.getElementById("joinRoomBtn").onclick = () => {
   if (code) joinRoom(code); else alert("أدخل كود الغرفة");
 };
 document.getElementById("leaveRoomBtn").onclick = () => {
-  if (currentRoom) { db.ref(`rooms/${currentRoom}/paths`).off(); currentRoom=null; }
+  if (currentRoom) {
+    db.ref(`rooms/${currentRoom}/paths`).off();
+    db.ref(`rooms/${currentRoom}/events`).off();
+    currentRoom = null;
+  }
   document.getElementById("connectionStatus").classList.remove("status-connected");
   document.getElementById("newRoomBtn").style.display   = "";
   document.getElementById("joinRoomBtn").style.display  = "";
   document.getElementById("leaveRoomBtn").style.display = "none";
   notify("غادرت الغرفة");
 };
+
+function sanitizePath(p) {
+  // تأكد إن الـ path فيه كل الحاجات الضرورية
+  if (!p || !p.points || !Array.isArray(p.points)) return null;
+  return {
+    color:  p.color  || "#000000",
+    size:   p.size   || 3,
+    tool:   p.tool   || "brush",
+    points: p.points.filter(pt => pt && typeof pt.x === "number" && typeof pt.y === "number"),
+    t:      p.t      || 0
+  };
+}
+
 function joinRoom(code) {
-  if (currentRoom) db.ref(`rooms/${currentRoom}/paths`).off();
-  currentRoom=code; paths=[];
+  if (currentRoom) {
+    db.ref(`rooms/${currentRoom}/paths`).off();
+    db.ref(`rooms/${currentRoom}/events`).off();
+  }
+  currentRoom = code;
+  paths = [];
   document.getElementById("connectionStatus").classList.add("status-connected");
   document.getElementById("newRoomBtn").style.display   = "none";
   document.getElementById("joinRoomBtn").style.display  = "none";
   document.getElementById("leaveRoomBtn").style.display = "";
+
+  // استماع للـ paths — بيتحمل كل الرسم عند الانضمام وعند أي تغيير
   db.ref(`rooms/${currentRoom}/paths`).on("value", snap => {
     const data = snap.val();
-    paths = data ? Object.values(data) : [];
+    if (!data) { paths = []; rebuildOff(); compose(); return; }
+    paths = Object.values(data)
+      .map(sanitizePath)
+      .filter(p => p && p.points.length > 1);
     rebuildOff(); compose();
   });
+
+  // استماع للأحداث (clear, undo) من الآخرين
+  db.ref(`rooms/${currentRoom}/events`).on("child_added", snap => {
+    const ev = snap.val();
+    if (!ev || ev.clientId === clientId) return;
+    if (ev.type === "clear") {
+      paths = []; undonePaths = []; rebuildOff(); compose();
+    }
+  });
+
   notify("انضممت للغرفة: " + code);
+}
+
+// إرسال حدث clear للغرفة
+function sendClearEvent() {
+  if (!currentRoom) return;
+  db.ref(`rooms/${currentRoom}/events`).push({ type: "clear", clientId, t: Date.now() });
 }
 
 /* ══ Init ══ */
