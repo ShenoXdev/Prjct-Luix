@@ -114,7 +114,10 @@
     <label for="brushSize">الحجم:</label>
     <input type="number" id="brushSize" min="1" max="100" value="3">
   </div>
-  <button id="menuToggle" class="tool-button" style="border:none;background:none;font-size:20px;">⋯</button>
+  <div style="display:flex;gap:6px;align-items:center;">
+    <button id="homeBtn" class="tool-button" title="العودة للبداية (H)" style="font-size:18px;">🏠</button>
+    <button id="menuToggle" class="tool-button" style="border:none;background:none;font-size:20px;">⋯</button>
+  </div>
 </div>
 
 <div id="bottomBar">
@@ -200,6 +203,16 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 const clientId = Math.random().toString(36).substring(2, 10);
 
+// مراقبة حالة الاتصال بـ Firebase
+db.ref(".info/connected").on("value", snap => {
+  const connected = snap.val() === true;
+  const el = document.getElementById("connectionStatus");
+  if (currentRoom) {
+    el.classList.toggle("status-connected",    connected);
+    el.classList.toggle("status-disconnected", !connected);
+  }
+});
+
 /* ══ Canvas setup ══ */
 const canvas      = document.getElementById("mainCanvas");
 const ctx         = canvas.getContext("2d");
@@ -208,9 +221,7 @@ const brushSizeEl = document.getElementById("brushSize");
 const zoomInfoEl  = document.getElementById("zoomInfo");
 const syncNote    = document.getElementById("syncNotification");
 
-// Offscreen canvas — يخزن الرسم المكتمل بإحداثيات عالمية (بدون zoom/pan)
-const off    = document.createElement("canvas");
-const offCtx = off.getContext("2d");
+// no offscreen — paths drawn directly each frame
 
 const DPR = window.devicePixelRatio || 1;
 
@@ -222,7 +233,6 @@ function resizeAll() {
   canvas.height = H * DPR;
   canvas.style.width  = W + "px";
   canvas.style.height = H + "px";
-  if (off.width < 8000) { off.width = 8000; off.height = 8000; }
   compose();
 }
 window.addEventListener("resize", resizeAll);
@@ -235,6 +245,7 @@ let isZooming = false, lastTouchDist = 0;
 let isPanning = false, panStartX = 0, panStartY = 0, panStartPX = 0, panStartPY = 0;
 let currentRoom = null, currentPathId = null;
 let currentTool = "brush";
+let livePaths = {}; // strokes من الأعضاء الآخرين أثناء رسمهم
 
 /* ══ Helpers ══ */
 function notify(msg, ms = 2000) {
@@ -276,7 +287,7 @@ function generateGrains(path) {
       path.grains.push({
         x:   pts[i-1].x + dx*t + (Math.random()-.5)*2*spread,
         y:   pts[i-1].y + dy*t + (Math.random()-.5)*2*spread,
-        rad: baseRad * (.4 + Math.random()*.9),
+        rad: baseRad * (.4 + Math.random()*.9) * DPR,
         a:   0.25 + Math.random()*.55
       });
     }
@@ -298,7 +309,8 @@ function renderPath(c, path) {
     }
   } else {
     c.strokeStyle = path.color;
-    c.lineWidth   = path.size;
+    // نضرب الـ lineWidth في DPR عشان الخط يبقى حاد على كل الشاشات
+    c.lineWidth   = path.size * DPR;
     c.lineCap     = "round";
     c.lineJoin    = "round";
     c.beginPath();
@@ -310,28 +322,25 @@ function renderPath(c, path) {
   c.restore();
 }
 
-/* ══ Offscreen: stamp one path ══ */
-function stampToOff(path) {
-  offCtx.save();
-  offCtx.setTransform(1, 0, 0, 1, 0, 0);
-  renderPath(offCtx, path);
-  offCtx.restore();
-}
+/* ══ stampToOff / rebuildOff — just trigger compose ══ */
+function stampToOff()  { compose(); }
+function rebuildOff()  { compose(); }
 
-/* ══ Rebuild offscreen from scratch ══ */
-function rebuildOff() {
-  offCtx.setTransform(1, 0, 0, 1, 0, 0);
-  offCtx.clearRect(0, 0, off.width, off.height);
-  for (const p of paths) renderPath(offCtx, p);
-}
-
-/* ══ Compose: offscreen → main canvas with zoom/pan ══ */
+/* ══ Compose: رسم كل الـ paths مباشرة — مساحة لا نهائية ══ */
 function compose() {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = "white";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.save();
   ctx.setTransform(zoom, 0, 0, zoom, panX, panY);
-  ctx.drawImage(off, 0, 0);
+  for (const p of paths) renderPath(ctx, p);
+  // رسم الـ stroke الحالي (بتاعنا إحنا)
+  if (drawing && currentPath && currentPath.points.length > 1) {
+    renderLivePath(ctx, currentPath);
+  }
+  // رسم الـ strokes الحية من الآخرين
+  for (const p of Object.values(livePaths)) renderLivePath(ctx, p);
+  ctx.restore();
   updateZoomInfo();
 }
 
@@ -347,7 +356,31 @@ function applyZoom(nz, sx, sy) {
   compose();
 }
 
-/* ══ Live drawing on main canvas ══ */
+/* ══ Live path preview ══ */
+function renderLivePath(c, path) {
+  if (!path || path.points.length < 2) return;
+  c.save();
+  if (path.tool === "pencil") {
+    c.globalAlpha = 0.45;
+    c.strokeStyle = path.color;
+    c.lineWidth   = Math.max(0.5, path.size * 0.35) * DPR;
+    c.lineCap = "round"; c.lineJoin = "round";
+    c.beginPath();
+    c.moveTo(path.points[0].x, path.points[0].y);
+    for (let i = 1; i < path.points.length; i++) c.lineTo(path.points[i].x, path.points[i].y);
+    c.stroke();
+  } else {
+    c.strokeStyle = path.color;
+    c.lineWidth   = path.size * DPR;
+    c.lineCap = "round"; c.lineJoin = "round";
+    c.beginPath();
+    c.moveTo(path.points[0].x, path.points[0].y);
+    for (let i = 1; i < path.points.length; i++) c.lineTo(path.points[i].x, path.points[i].y);
+    c.stroke();
+  }
+  c.restore();
+}
+
 let liveLastX = 0, liveLastY = 0;
 
 function startDrawing(sx, sy) {
@@ -369,30 +402,7 @@ function startDrawing(sx, sy) {
 }
 
 function drawLiveSegment(x1, y1, x2, y2, path) {
-  // رسم مباشر على main canvas فوق الـ offscreen (في إحداثيات عالمية مع transform)
-  ctx.save();
-  ctx.setTransform(zoom, 0, 0, zoom, panX, panY);
-  if (path.tool === "pencil") {
-    const { r, g, b } = hexToComponents(path.color);
-    const dx = x2-x1, dy = y2-y1, len = Math.sqrt(dx*dx+dy*dy);
-    const spread = path.size*.7, baseRad = .12+path.size*.04;
-    const count  = Math.max(2, Math.floor(len/.8)*path.size*.5);
-    for (let j = 0; j < count; j++) {
-      const t = Math.random();
-      const rad = baseRad*(.4+Math.random()*.9);
-      const a   = .25+Math.random()*.55;
-      ctx.beginPath();
-      ctx.arc(x1+dx*t+(Math.random()-.5)*2*spread, y1+dy*t+(Math.random()-.5)*2*spread, rad, 0, Math.PI*2);
-      ctx.fillStyle = `rgba(${r},${g},${b},${a.toFixed(2)})`;
-      ctx.fill();
-    }
-  } else {
-    ctx.strokeStyle = path.color;
-    ctx.lineWidth   = path.size;
-    ctx.lineCap = "round"; ctx.lineJoin = "round";
-    ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
-  }
-  ctx.restore();
+  compose(); // يرسم كل الـ paths + الـ stroke الحالي
 }
 
 function continueDrawing(sx, sy) {
@@ -401,7 +411,16 @@ function continueDrawing(sx, sy) {
   currentPath.points.push(pos);
   drawLiveSegment(liveLastX, liveLastY, pos.x, pos.y, currentPath);
   liveLastX = pos.x; liveLastY = pos.y;
-  // Firebase update يحصل في stopDrawing بس عشان نقلل الكتابات
+  // إرسال real-time للـ room كل 5 نقط
+  if (currentRoom && currentPathId && currentPath.points.length % 5 === 0) {
+    db.ref(`rooms/${currentRoom}/live/${clientId}`).set({
+      color:  currentPath.color,
+      size:   currentPath.size,
+      tool:   currentPath.tool,
+      points: currentPath.points,
+      ts:     Date.now()
+    });
+  }
 }
 
 function stopDrawing() {
@@ -421,6 +440,10 @@ function stopDrawing() {
         t:      currentPath.t
       });
     }
+  }
+  // امسح الـ live node بعد ما الرسم خلص
+  if (currentRoom && currentPathId) {
+    db.ref(`rooms/${currentRoom}/live/${clientId}`).remove();
   }
   drawing = false; currentPath = null; currentPathId = null;
 }
@@ -510,6 +533,7 @@ window.addEventListener("keydown", e => {
   if (ctrl && e.key === "s" && e.shiftKey)  { e.preventDefault(); doSaveJson(); }
   if (ctrl && e.key === "o")          { e.preventDefault(); document.getElementById("jsonFileInput").click(); }
   if (e.key === "Delete" && !e.ctrlKey) { doClear(); }
+  if (e.key === "h" || e.key === "H") { zoom=1; panX=0; panY=0; compose(); }
   if (e.key === "b" || e.key === "B") setTool("brush");
   if (e.key === "p" || e.key === "P") setTool("pencil");
   if (ctrl && (e.key==="+" || e.key==="=")) { e.preventDefault(); applyZoom(zoom*1.2, window.innerWidth/2, window.innerHeight/2); }
@@ -522,6 +546,7 @@ window.addEventListener("keydown", e => {
       "Ctrl+S  حفظ PNG       Ctrl+Shift+S  حفظ JSON\n" +
       "Ctrl+O  فتح JSON      Delete  مسح الكل\n" +
       "B  فرشاة              P  قلم رصاص\n" +
+      "H  العودة للبداية\n" +
       "Ctrl++/-  زوم         Ctrl+0  إعادة ضبط الزوم\n" +
       "زر أوسط/يمين + سحب  تحريك اللوحة\n" +
       "Scroll  زوم";
@@ -567,6 +592,7 @@ function doSaveJson() {
 }
 
 /* ══ Buttons ══ */
+document.getElementById("homeBtn").onclick = () => { zoom=1; panX=0; panY=0; compose(); notify("العودة للبداية"); };
 document.getElementById("undoBtn").onclick  = doUndo;
 document.getElementById("redoBtn").onclick  = doRedo;
 document.getElementById("clearBtn").onclick = doClear;
@@ -644,8 +670,11 @@ document.getElementById("leaveRoomBtn").onclick = () => {
   if (currentRoom) {
     db.ref(`rooms/${currentRoom}/paths`).off();
     db.ref(`rooms/${currentRoom}/events`).off();
+    db.ref(`rooms/${currentRoom}/live`).off();
+    db.ref(`rooms/${currentRoom}/live/${clientId}`).remove();
     currentRoom = null;
   }
+  livePaths = {};
   document.getElementById("connectionStatus").classList.remove("status-connected");
   document.getElementById("newRoomBtn").style.display   = "";
   document.getElementById("joinRoomBtn").style.display  = "";
@@ -677,24 +706,36 @@ function joinRoom(code) {
   document.getElementById("joinRoomBtn").style.display  = "none";
   document.getElementById("leaveRoomBtn").style.display = "";
 
-  // استماع للـ paths — بيتحمل كل الرسم عند الانضمام وعند أي تغيير
+  // استماع للـ paths المكتملة
   db.ref(`rooms/${currentRoom}/paths`).on("value", snap => {
     const data = snap.val();
-    if (!data) { paths = []; rebuildOff(); compose(); return; }
+    if (!data) { paths = []; compose(); return; }
     paths = Object.values(data)
       .map(sanitizePath)
       .filter(p => p && p.points.length > 1);
-    rebuildOff(); compose();
-  });
+    compose();
+  }, err => console.error("Firebase paths error:", err));
 
-  // استماع للأحداث (clear, undo) من الآخرين
-  db.ref(`rooms/${currentRoom}/events`).on("child_added", snap => {
+  // استماع للـ live strokes من الآخرين
+  db.ref(`rooms/${currentRoom}/live`).on("value", snap => {
+    const data = snap.val();
+    livePaths = {};
+    if (data) {
+      Object.entries(data).forEach(([id, p]) => {
+        if (id === clientId) return; // مش بنرسم اللي بعتناه إحنا
+        const sp = sanitizePath(p);
+        if (sp && sp.points.length > 1) livePaths[id] = sp;
+      });
+    }
+    compose();
+  }, err => console.error("Firebase live error:", err));
+
+  // استماع للأحداث (clear)
+  db.ref(`rooms/${currentRoom}/events`).limitToLast(20).on("child_added", snap => {
     const ev = snap.val();
     if (!ev || ev.clientId === clientId) return;
-    if (ev.type === "clear") {
-      paths = []; undonePaths = []; rebuildOff(); compose();
-    }
-  });
+    if (ev.type === "clear") { paths = []; undonePaths = []; livePaths = {}; compose(); }
+  }, err => console.error("Firebase events error:", err));
 
   notify("انضممت للغرفة: " + code);
 }
