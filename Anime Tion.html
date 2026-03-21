@@ -322,11 +322,14 @@ function renderPath(c, path) {
     c.save();
     c.setTransform(1, 0, 0, 1, 0, 0);
     c.imageSmoothingEnabled = false;
+    // الـ px بيتضرب في zoom عشان يتصغر مع zoom out ويتكبر مع zoom in
+    // بالظبط زي أي عنصر في اللوحة
     for (const gr of path.grains) {
-      const sx = Math.round(gr.x * zoom + panX);
-      const sy = Math.round(gr.y * zoom + panY);
+      const sx  = Math.round(gr.x * zoom + panX);
+      const sy  = Math.round(gr.y * zoom + panY);
+      const spx = Math.max(1, Math.round(gr.px * zoom));
       c.fillStyle = `rgba(${r},${g},${b},${gr.a.toFixed(2)})`;
-      c.fillRect(sx, sy, gr.px, gr.px);
+      c.fillRect(sx, sy, spx, spx);
     }
     c.restore();
   } else {
