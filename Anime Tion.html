@@ -292,20 +292,22 @@ function generateGrains(path) {
   path.grains = [];
   const pts = path.points, size = path.size;
   const spread = size * 0.7;
-  const pxSize = Math.max(1, Math.round(size * 0.55 * DPR));
+  // صغير جداً — max 1px
+  const pxSize = Math.max(0.5, size * 0.12 * DPR);
 
   for (let i = 1; i < pts.length; i++) {
     const dx = pts[i].x - pts[i-1].x, dy = pts[i].y - pts[i-1].y;
     const len = Math.sqrt(dx*dx + dy*dy);
     if (len === 0) continue;
-    const count = Math.max(4, Math.floor(len / 0.8) * size * 0.5);
+    // عشرة أضعاف العدد
+    const count = Math.max(40, Math.floor(len / 0.08) * size * 0.5);
     for (let j = 0; j < count; j++) {
       const t = rng();
       path.grains.push({
         x:  pts[i-1].x + dx*t + (rng()-.5)*2*spread,
         y:  pts[i-1].y + dy*t + (rng()-.5)*2*spread,
-        px: pxSize + Math.round(rng() * pxSize * 0.6),
-        a:  0.28 + rng() * 0.50
+        px: pxSize * (0.4 + rng() * 0.6),
+        a:  0.05 + rng() * 0.18   // opacity منخفضة جداً
       });
     }
   }
