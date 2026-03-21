@@ -278,7 +278,8 @@ function generateGrains(path) {
   const pts = path.points, size = path.size;
   const spread = size * 0.7;
   // حجم الـ grain بالـ pixels الحقيقية (مش world units) — ثابت مهما تزوم
-  const pxSize = Math.max(1, Math.round(size * 0.55));
+  // حجم ثابت بالـ physical pixels — مش بيتغير مع الزوم أبداً
+  const pxSize = Math.max(1, Math.round(size * 0.55 * DPR));
   for (let i = 1; i < pts.length; i++) {
     const dx = pts[i].x - pts[i-1].x, dy = pts[i].y - pts[i-1].y;
     const len = Math.sqrt(dx*dx + dy*dy);
@@ -333,21 +334,29 @@ function renderPath(c, path) {
 function stampToOff()  { compose(); }
 function rebuildOff()  { compose(); }
 
-/* ══ Compose: رسم كل الـ paths مباشرة — مساحة لا نهائية ══ */
+/* ══ Compose ══ */
 function compose() {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = "white";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // الـ brush يحتاج transform — الـ pencil بيحسب screen coords بنفسه
   ctx.save();
   ctx.setTransform(zoom, 0, 0, zoom, panX, panY);
-  for (const p of paths) renderPath(ctx, p);
-  // رسم الـ stroke الحالي (بتاعنا إحنا)
+  for (const p of paths) {
+    if (p.tool !== "pencil") renderPath(ctx, p);
+  }
   if (drawing && currentPath && currentPath.points.length > 1) {
     renderLivePath(ctx, currentPath);
   }
-  // رسم الـ strokes الحية من الآخرين
   for (const p of Object.values(livePaths)) renderLivePath(ctx, p);
   ctx.restore();
+
+  // الـ pencil بيترسم بعد restore عشان يشتغل بـ screen coords نظيفة
+  for (const p of paths) {
+    if (p.tool === "pencil") renderPath(ctx, p);
+  }
+
   updateZoomInfo();
 }
 
